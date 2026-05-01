@@ -1,0 +1,42 @@
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "A-core"
+version = "0.1.0"
+description = "A CLI framework core - minimal, modular, accessible"
+readme = "README.md"
+license = "GPL-3.0-only"
+authors = ["Ron <ron@example.com>"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Utilities",
+]
+packages = [{ include = "A", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<4.0"
+typer = ">=0.12"
+rich = ">=13"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8"
+ruff = ">=0.4"
+
+[tool.poetry.scripts]
+A = "A.cli:main"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

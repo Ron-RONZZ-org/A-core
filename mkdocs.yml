@@ -1,0 +1,29 @@
+# A-core documentation configuration
+
+site_name: A - Minimuma CLI Kadro
+site_description: "Minimal CLI framework - Esperanto-native"
+site_url: https://github.com/Ron-RONZZ-org/A-core
+repo_url: https://github.com/Ron-RONZZ-org/A-core
+repo_name: Ron-RONZZ-org/A-core
+
+copyright: "GPL-3.0-only"
+
+# Navigation - use absolute links for language switching
+nav:
+  - Home: https://github.com/Ron-RONZZ-org/A-core
+  - Documentation:
+    - "English": en/index.md
+    - "Esperanto": eo/index.md  
+    - "Français": fr/index.md
+
+# Theme
+theme:
+  name: readthedocs
+  highlight_language: python
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
