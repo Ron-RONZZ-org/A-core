@@ -197,6 +197,16 @@ class TestValidateSafe:
 
         assert validate_safe("") is False
 
+    def test_with_allowed_vars(self):
+        from A.utils.expr import validate_safe
+
+        # D is not in default allowed set, so this should fail
+        assert validate_safe("20 + 2 * D") is False
+        # D is explicitly allowed
+        assert validate_safe("20 + 2 * D", allowed_vars={"D"}) is True
+        assert validate_safe("min(30, 10 * H)", allowed_vars={"H"}) is True
+        assert validate_safe("M + D + H + m", allowed_vars={"M", "D", "H", "m"}) is True
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

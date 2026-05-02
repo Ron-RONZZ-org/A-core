@@ -162,7 +162,10 @@ def _assert_safe_expr(
                 )
 
 
-def validate_safe(expression: str) -> bool:
+def validate_safe(
+    expression: str,
+    allowed_vars: set[str] | None = None,
+) -> bool:
     """Check whether an expression is syntactically and structurally safe.
 
     This is a lightweight check that parses and validates the AST
@@ -170,13 +173,19 @@ def validate_safe(expression: str) -> bool:
 
     Args:
         expression: Math expression string.
+        allowed_vars: Optional set of additional allowed variable names
+                      beyond the default function names.
 
     Returns:
         True if the expression is safe, False otherwise.
     """
     try:
         tree = ast.parse(expression.strip(), mode="eval")
-        _assert_safe_expr(tree, {}, _DEFAULT_FUNCTIONS)
+        # Build allowed vars including both functions and extra variables
+        allowed = dict.fromkeys(_DEFAULT_FUNCTIONS)
+        if allowed_vars:
+            allowed.update(dict.fromkeys(allowed_vars))
+        _assert_safe_expr(tree, allowed, _DEFAULT_FUNCTIONS)
         return True
     except (ValueError, SyntaxError):
         return False
