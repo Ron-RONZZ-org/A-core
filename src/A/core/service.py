@@ -49,7 +49,8 @@ class CRUDService:
         fts_config: FTSConfig | None = None,
         undo_size: int = 10,
     ):
-        """
+        """Initialize CRUD service.
+
         Args:
             db: SQLiteDB instance
             table: Table name for CRUD operations
@@ -61,11 +62,38 @@ class CRUDService:
         self._trash_table = f"{table}_rubujo"
         self._fts_config = fts_config
 
+        # Create trash table if not exists (copy schema from main table)
+        self._ensure_trash_table()
+
         # Undo support
         self._undo_manager = UndoManager(max_size=undo_size, db=db) if undo_size > 0 else None
 
         if fts_config:
             self._ensure_fts()
+
+    def _ensure_trash_table(self) -> None:
+        """Create trash table if not exists (schema from main table + forigita_je)."""
+        # Get main table schema
+        schema_sql = self.db.execute_one(
+            f"SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (self.table,)
+        )
+        if not schema_sql or not schema_sql["sql"]:
+            return
+
+        # Create trash table with additional forigita_je column
+        # Replace closing paren with , forigita_je timestamp)
+        trash_sql = schema_sql["sql"].replace(
+            ")", f", forigita_je TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+        ).replace(f"CREATE TABLE {self.table}", f"CREATE TABLE {self._trash_table}")
+
+        self.db.execute(trash_sql)
+
+        # Create index on deleted_at for cleanup queries
+        self.db.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{self.table}_trash_deleted "
+            f"ON {self._trash_table}(forigita_je)"
+        )
 
     # --- FTS5 Methods ---
 
@@ -445,6 +473,32 @@ class CRUDService:
         with self.db.transaction() as conn:
             cursor = conn.execute(sql, (cutoff, f"-{days} days"))
             return cursor.rowcount
+
+    def get_trash(self, limit: int = 100) -> list[dict[str, Any]]:
+        """List entries in trash.
+
+        Args:
+            limit: Max entries to return (default 100)
+
+        Returns:
+            List of trashed entries with deletion timestamps
+        """
+        sql = f"SELECT * FROM {self._trash_table} ORDER BY forigita_je DESC LIMIT ?"
+        return self.db.execute(sql, (limit,))
+
+    def permanent_delete(self, uuid: str) -> bool:
+        """Permanently delete a single entry from trash.
+
+        Args:
+            uuid: Entry UUID to permanently delete
+
+        Returns:
+            True if entry was found and deleted, False otherwise
+        """
+        sql = f"DELETE FROM {self._trash_table} WHERE uuid = ?"
+        with self.db.transaction() as conn:
+            cursor = conn.execute(sql, (uuid,))
+            return cursor.rowcount > 0
 
     # Undo stack operations
     def load_undo_stack(self) -> list[dict[str, Any]]:
