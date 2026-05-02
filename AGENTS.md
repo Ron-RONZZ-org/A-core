@@ -342,26 +342,62 @@ db = SQLiteDB("vorto", schema)
 | `get(uuid)` | Get by UUID |
 | `get_by_field(field, value)` | Get by field |
 | `search(field, query)` | Search |
-| `create(data)` | Create with auto uuid/timestamp |
-| `update(uuid, data)` | Update with timestamp |
-| `delete(uuid, soft)` | Delete (soft/permanent) |
+| `create(data)` | Create with auto uuid/timestamp + undo tracking |
+| `update(uuid, data)` | Update with timestamp + undo tracking |
+| `delete(uuid, soft)` | Delete (soft/permanent) + undo tracking |
 | `restore(uuid)` | Restore from trash |
 | `empty_trash(days)` | Cleanup trash |
-| `push_undo(op, data)` | Undo stack |
-| `load_undo_stack()` | Load undo stack |
+| `undo()` | Undo last operation (returns operation details or None) |
+| `clear_undo_stack()` | Clear undo stack |
 
 ```python
-# Example
+# Example with undo
 from A.core.service import CRUDService
 from A.data import SQLiteDB
 
 db = SQLiteDB("vorto")
-words = CRUDService(db, "vorto")
+words = CRUDService(db, "vorto", undo_size=10)  # Enable undo with max 10 operations
 
 words.create({"teksto": "hello"})
 words.list()
+result = words.undo()  # Returns {"operation_type": "add", "record_uuid": "...", ...}
 words.delete(uuid, soft=True)
 words.restore(uuid)
+```
+
+### Undo System (`A.core.undo`)
+
+| Class/Function | Description |
+|---------------|-------------|
+| `UndoManager` | In-memory undo stack with configurable size |
+| `UndoOperation` | Dataclass representing a trackable operation |
+| `create_undo_operation()` | Convenience factory function |
+
+**UndoOperation fields:**
+- `operation_type: Literal["add", "modify", "delete"]`
+- `table: str`
+- `record_uuid: str`
+- `old_data: dict | None` — previous state (for modify/delete)
+- `new_data: dict | None` — new state (for add/modify)
+- `timestamp: datetime`
+
+**UndoManager features:**
+- O(1) push/undo operations via `collections.deque(maxlen=N)`
+- Optional database persistence for crash recovery
+- Integrates with CRUDService automatically
+
+```python
+# Standalone usage
+from A.core.undo import UndoManager, create_undo_operation
+
+manager = UndoManager(max_size=10)
+manager.push(create_undo_operation(
+    operation_type="add",
+    table="vorto",
+    record_uuid="abc-123",
+    new_data={"teksto": "hello"},
+))
+op = manager.undo()  # Returns UndoOperation or None
 ```
 
 ### Plugin Contract

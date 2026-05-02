@@ -27,6 +27,7 @@ from typing import Any
 
 from A.data.base import SQLiteDB
 from A.data.search import FTSConfig, build_fts_schema, build_search_query, build_index_sql
+from A.core.undo import UndoManager, create_undo_operation
 
 
 class CRUDService:
@@ -46,17 +47,22 @@ class CRUDService:
         db: SQLiteDB,
         table: str,
         fts_config: FTSConfig | None = None,
+        undo_size: int = 10,
     ):
         """
         Args:
             db: SQLiteDB instance
             table: Table name for CRUD operations
             fts_config: Optional FTS5 configuration for full-text search
+            undo_size: Max size of undo stack (0 to disable)
         """
         self.db = db
         self.table = table
         self._trash_table = f"{table}_rubujo"
         self._fts_config = fts_config
+
+        # Undo support
+        self._undo_manager = UndoManager(max_size=undo_size, db=db) if undo_size > 0 else None
 
         if fts_config:
             self._ensure_fts()
@@ -302,10 +308,22 @@ class CRUDService:
         if self._fts_config:
             self._index_fts(data["uuid"])
 
+        # Track for undo
+        if self._undo_manager:
+            self._undo_manager.push(create_undo_operation(
+                operation_type="add",
+                table=self.table,
+                record_uuid=data["uuid"],
+                new_data=data.copy(),
+            ))
+
         return data
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
         """Update an entry, preserving creation timestamp."""
+        # Get old data for undo tracking
+        old_data = self.get(uuid)
+
         data["modifita_je"] = datetime.now(timezone.utc).isoformat()
 
         set_clauses = [f"{k} = ?" for k in data.keys()]
@@ -320,6 +338,16 @@ class CRUDService:
             self._remove_from_fts(uuid)
             self._index_fts(uuid)
 
+        # Track for undo
+        if self._undo_manager and old_data:
+            self._undo_manager.push(create_undo_operation(
+                operation_type="modify",
+                table=self.table,
+                record_uuid=uuid,
+                old_data=old_data,
+                new_data=data,
+            ))
+
         return {**self.get(uuid), **data}
 
     def delete(self, uuid: str, soft: bool = True) -> None:
@@ -329,6 +357,9 @@ class CRUDService:
             uuid: Entry UUID
             soft: If True, move to trash table (rubujo). If False, permanent delete.
         """
+        # Get old data for undo tracking
+        old_data = self.get(uuid)
+
         if soft:
             self._move_to_trash(uuid)
         else:
@@ -338,6 +369,15 @@ class CRUDService:
             sql = f"DELETE FROM {self.table} WHERE uuid = ?"
             with self.db.transaction() as conn:
                 conn.execute(sql, (uuid,))
+
+        # Track for undo
+        if self._undo_manager and old_data:
+            self._undo_manager.push(create_undo_operation(
+                operation_type="delete",
+                table=self.table,
+                record_uuid=uuid,
+                old_data=old_data,
+            ))
 
     def _move_to_trash(self, uuid: str) -> None:
         """Move entry to trash table."""
@@ -423,8 +463,70 @@ class CRUDService:
 
     def clear_undo_stack(self) -> None:
         """Clear the undo stack."""
+        if self._undo_manager:
+            self._undo_manager.clear()
+        # Also clear legacy DB-based stack
         with self.db.transaction() as conn:
             conn.execute("DELETE FROM undo_stack")
+
+    def undo(self) -> dict[str, Any] | None:
+        """Undo the last operation.
+
+        Returns:
+            The undone operation details, or None if nothing to undo or undo is disabled
+        """
+        if not self._undo_manager:
+            return None
+
+        operation = self._undo_manager.undo()
+        if not operation:
+            return None
+
+        # Perform the actual undo based on operation type
+        if operation.operation_type == "add":
+            # Undo add = delete the record (hard delete to avoid nested tracking)
+            sql = f"DELETE FROM {self.table} WHERE uuid = ?"
+            with self.db.transaction() as conn:
+                conn.execute(sql, (operation.record_uuid,))
+            # Remove from FTS if enabled
+            if self._fts_config:
+                self._remove_from_fts(operation.record_uuid)
+
+        elif operation.operation_type == "modify":
+            # Undo modify = restore old data
+            if operation.old_data:
+                # Filter out auto-generated fields
+                old_data = {k: v for k, v in operation.old_data.items()
+                            if k not in ("uuid", "kreita_je")}
+                old_data["modifita_je"] = datetime.now(timezone.utc).isoformat()
+                set_clauses = [f"{k} = ?" for k in old_data.keys()]
+                values = list(old_data.values()) + [operation.record_uuid]
+                sql = f"UPDATE {self.table} SET {', '.join(set_clauses)} WHERE uuid = ?"
+                with self.db.transaction() as conn:
+                    conn.execute(sql, values)
+                # Re-index in FTS
+                if self._fts_config:
+                    self._remove_from_fts(operation.record_uuid)
+                    self._index_fts(operation.record_uuid)
+
+        elif operation.operation_type == "delete":
+            # Undo delete = restore the record
+            if operation.old_data:
+                # Restore with original creation time, remove trash fields
+                restored = {k: v for k, v in operation.old_data.items()
+                           if k != "forigita_je"}
+                restored["modifita_je"] = datetime.now(timezone.utc).isoformat()
+                columns = list(restored.keys())
+                values = list(restored.values())
+                placeholders = ", ".join(["?"] * len(columns))
+                sql = f"INSERT INTO {self.table} ({', '.join(columns)}) VALUES ({placeholders})"
+                with self.db.transaction() as conn:
+                    conn.execute(sql, values)
+                # Re-index in FTS
+                if self._fts_config:
+                    self._index_fts(restored["uuid"])
+
+        return operation.to_dict()
 
 
 # Convenience function for quick service creation

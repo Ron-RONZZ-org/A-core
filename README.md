@@ -27,6 +27,7 @@ Esperanto-native CLI framework with plugin support.
 - Full-text search via SQLite FTS5
 - Text normalization (French ligatures, accents)
 - Fuzzy search with rapidfuzz (optional)
+- Undo system for operations tracking (add/modify/delete)
 - Minimal, calm output
 - Shared utilities (i18n, output, subprocess)
 
@@ -85,6 +86,34 @@ service.search_advanced("query", fuzzy=True)  # Combined search
 ```bash
 pip install A-core[search]  # Adds rapidfuzz for fast fuzzy matching
 ```
+
+## Undo System
+
+A-core provides a built-in undo system for tracking operations:
+
+```python
+from A.core.service import CRUDService
+from A.data import SQLiteDB
+
+# Enable undo with configurable stack size (default: 10)
+service = CRUDService(db, "words", undo_size=10)
+
+# Operations are automatically tracked
+service.create({"teksto": "hello"})  # Tracks add
+service.update(uuid, {"teksto": "world"})  # Tracks modify
+service.delete(uuid, soft=True)  # Tracks delete
+
+# Undo last operation
+result = service.undo()
+# Returns: {"operation_type": "delete", "table": "words", "record_uuid": "...", ...}
+```
+
+**Features:**
+- O(1) undo operations via `collections.deque(maxlen=N)`
+- Configurable stack size (default 10, set to 0 to disable)
+- Automatic tracking of create/update/delete operations
+- Timestamps for each operation
+- Optional DB persistence for crash recovery
 
 ## Usage
 
