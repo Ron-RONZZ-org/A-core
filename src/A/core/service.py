@@ -85,7 +85,7 @@ class CRUDService:
         # Replace closing paren with , forigita_je timestamp)
         trash_sql = schema_sql["sql"].replace(
             ")", f", forigita_je TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-        ).replace(f"CREATE TABLE {self.table}", f"CREATE TABLE {self._trash_table}")
+        ).replace(f"CREATE TABLE {self.table}", f"CREATE TABLE IF NOT EXISTS {self._trash_table}")
 
         self.db.execute(trash_sql)
 
@@ -337,7 +337,7 @@ class CRUDService:
             self._index_fts(data["uuid"])
 
         # Track for undo
-        if self._undo_manager:
+        if self._undo_manager is not None:
             self._undo_manager.push(create_undo_operation(
                 operation_type="add",
                 table=self.table,
@@ -367,7 +367,7 @@ class CRUDService:
             self._index_fts(uuid)
 
         # Track for undo
-        if self._undo_manager and old_data:
+        if self._undo_manager is not None and old_data:
             self._undo_manager.push(create_undo_operation(
                 operation_type="modify",
                 table=self.table,
@@ -399,7 +399,7 @@ class CRUDService:
                 conn.execute(sql, (uuid,))
 
         # Track for undo
-        if self._undo_manager and old_data:
+        if self._undo_manager is not None and old_data:
             self._undo_manager.push(create_undo_operation(
                 operation_type="delete",
                 table=self.table,
@@ -517,7 +517,7 @@ class CRUDService:
 
     def clear_undo_stack(self) -> None:
         """Clear the undo stack."""
-        if self._undo_manager:
+        if self._undo_manager is not None:
             self._undo_manager.clear()
         # Also clear legacy DB-based stack
         with self.db.transaction() as conn:
@@ -529,7 +529,7 @@ class CRUDService:
         Returns:
             The undone operation details, or None if nothing to undo or undo is disabled
         """
-        if not self._undo_manager:
+        if self._undo_manager is None:
             return None
 
         operation = self._undo_manager.undo()

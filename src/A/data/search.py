@@ -144,25 +144,31 @@ def build_index_sql(
 ) -> tuple[str, list]:
     """Build INSERT SQL for FTS index with normalization applied.
 
+    For external content FTS5 tables the rowid must match the content
+    table's rowid. If not provided it is looked up from *values*.
+
     Args:
         config: FTS5 configuration
         uuid: Entry UUID
         values: Raw column values from main table
-        rowid: Optional rowid (looked up if not provided)
+        rowid: Optional rowid (looked up from values if not provided)
 
     Returns:
         (sql, params) tuple
     """
-    norm_values = [uuid]  # UNINDEXED column
+    if rowid is None:
+        rowid = values.get("rowid")
+
+    norm_values = [rowid, uuid]  # rowid first, then uuid (UNINDEXED)
     for col in config.fts_columns:
         val = values.get(col, "")
         if col in config.normalize:
             val = config.normalize[col](val)
         norm_values.append(val)
 
-    placeholders = ", ".join(["?"] * (len(config.fts_columns) + 1))
+    placeholders = ", ".join(["?"] * (len(config.fts_columns) + 2))
     sql = f"""
-    INSERT INTO {config.fts_table} (uuid, {', '.join(config.fts_columns)})
+    INSERT INTO {config.fts_table} (rowid, uuid, {', '.join(config.fts_columns)})
     VALUES ({placeholders})
     """
     return sql, norm_values
