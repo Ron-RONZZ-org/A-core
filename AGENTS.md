@@ -400,6 +400,100 @@ manager.push(create_undo_operation(
 op = manager.undo()  # Returns UndoOperation or None
 ```
 
+### Crypto (`A.core.crypto`)
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `encrypt(plaintext: bytes, password: str, salt: bytes = None) -> bytes` | Encrypted data | AES-256-GCM encryption |
+| `decrypt(encrypted_data: bytes, password: str) -> bytes` | Original plaintext | Decrypt AES-256-GCM |
+| `encrypt_str(plaintext: str, password: str) -> bytes` | Encrypted bytes | Encrypt string |
+| `decrypt_str(encrypted_data: bytes, password: str) -> str` | Original string | Decrypt to string |
+| `is_encrypted(data: bytes) -> bool` | True if encrypted | Check encryption |
+| `derive_key(password: str, salt: bytes) -> bytes` | 256-bit key | PBKDF2 key derivation |
+| `generate_salt() -> bytes` | 16-byte salt | Random salt |
+| `generate_nonce() -> bytes` | 12-byte nonce | Random nonce |
+| `encrypt_file(input_path: str, output_path: str, password: str) -> None` | — | Encrypt file |
+| `decrypt_file(input_path: str, output_path: str, password: str) -> None` | — | Decrypt file |
+
+**Encryption uses:**
+- AES-256-GCM (authenticated encryption)
+- PBKDF2-HMAC-SHA256 with 600,000 iterations
+- Random salt (16 bytes) + nonce (12 bytes) per encryption
+
+```python
+from A.core.crypto import encrypt, decrypt, encrypt_str, decrypt_str
+
+# Encrypt string (convenience)
+encrypted = encrypt_str("secret data", "password")
+decrypted = decrypt_str(encrypted, "password")
+
+# Encrypt bytes
+plaintext = b"binary data"
+encrypted = encrypt(plaintext, "password")
+decrypted = decrypt(encrypted, "password")
+```
+
+### Export (`A.core.export`)
+
+| Function | Description |
+|----------|-------------|
+| `export_json(data: list[dict], output_path: Path, encryption_password: str = None)` | Export to JSON |
+| `export_toml(data: dict, output_path: Path, encryption_password: str = None)` | Export to TOML |
+| `export_json_stream(generator, output_path: Path, encryption_password: str = None)` | Stream JSON export |
+| `export_toml_stream(generator, output_dir: Path, encryption_password: str = None)` | Stream to TOML files |
+| `is_encrypted_file(path: Path) -> bool` | Check if file encrypted |
+| `detect_format(path: Path) -> str` | Detect format (json/toml/encrypted) |
+
+**Export format:**
+- JSON: Full export all records as array
+- TOML: Single record export
+- Streaming: Generator pattern for large datasets
+
+```python
+from A.core.export import export_json, export_json_stream, export_toml
+from pathlib import Path
+
+# Full export
+data = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+export_json(data, Path("export.json"))
+
+# Encrypted export
+export_json(data, Path("export.enc"), encryption_password="my-password")
+
+# Streaming export
+def record_generator():
+    for i in range(10000):
+        yield {"id": i, "value": f"item-{i}"}
+
+export_json_stream(record_generator(), Path("large.json"))
+```
+
+### Import (`A.core.import_`)
+
+| Function | Description |
+|----------|-------------|
+| `import_json(path: Path, decryption_password: str = None) -> list[dict]` | Import JSON |
+| `import_toml(path: Path, decryption_password: str = None) -> dict` | Import TOML |
+| `import_auto(path: Path, decryption_password: str = None) -> list[dict] | dict` | Auto-detect format |
+| `import_stream(path: Path, decryption_password: str = None) -> Generator[dict]` | Stream import |
+
+```python
+from A.core.import_ import import_json, import_auto, import_stream
+
+# Import JSON
+records = import_json(Path("export.json"))
+
+# Import encrypted
+records = import_json(Path("export.enc"), decryption_password="my-password")
+
+# Auto-detect format
+data = import_auto(Path("data.json"))  # or .toml, or encrypted
+
+# Streaming import
+for record in import_stream(Path("data.json")):
+    process(record)
+```
+
 ### Plugin Contract
 
 Plugins must register via entry points:
