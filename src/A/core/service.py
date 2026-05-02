@@ -416,8 +416,8 @@ class CRUDService:
         # Add deletion timestamp
         entry["forigita_je"] = datetime.now(timezone.utc).isoformat()
 
-        # Remove modifita_je (not applicable in trash)
-        entry.pop("modifita_je", None)
+        # Keep modifita_je to satisfy NOT NULL constraint
+        entry.setdefault("modifita_je", entry["forigita_je"])
 
         # Insert into trash table
         columns = list(entry.keys())
@@ -427,10 +427,8 @@ class CRUDService:
 
         with self.db.transaction() as conn:
             conn.execute(sql, values)
-
-        # Delete from main table
-        delete_sql = f"DELETE FROM {self.table} WHERE uuid = ?"
-        conn.execute(delete_sql, (uuid,))
+            # Delete from main table inside the same transaction
+            conn.execute(f"DELETE FROM {self.table} WHERE uuid = ?", (uuid,))
 
     def restore(self, uuid: str) -> dict[str, Any] | None:
         """Restore entry from trash."""
