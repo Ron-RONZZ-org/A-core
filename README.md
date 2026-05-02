@@ -2,7 +2,18 @@
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 
 A - minimuma CLI kadro / A - minimal CLI framework
 
@@ -79,28 +90,72 @@ Instead of a plugin, use your terminal's clipboard tools directly:
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 alias kp='xclip -selection clipboard'
 
 # Linux (xsel)
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 alias kp='xsel --clipboard --input'
 
 # macOS
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 alias kp='pbcopy'
 
 # Usage
 
 ## Context
 
-For architecture and API reference, see [A-workspace](./workspace/).
+This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
+
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
+# Or if already cloned:
+git submodule update --init --recursive
+```
+
+**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
+
 A sistemo | kp    # Copy output to clipboard
 ```
 
