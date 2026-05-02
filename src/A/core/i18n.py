@@ -328,6 +328,17 @@ def tr(key: str, lang: str = None) -> str:
     return key
 
 
+def tr_multi(eo: str, en: str = None, fr: str = None) -> str:
+    """Return translation for current language from inline translations.
+
+    This provides a quick way to add inline translations without a dictionary.
+    Falls back: eo -> en -> eo.
+    """
+    translations = {"eo": eo, "en": en or eo, "fr": fr or en or eo}
+    current = _translations.get(_current_lang, {})
+    return translations.get(_current_lang, eo)
+
+
 def available_languages() -> list[str]:
     """Return list of available language codes."""
     return list(_translations.keys())
