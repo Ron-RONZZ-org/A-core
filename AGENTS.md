@@ -494,6 +494,50 @@ for record in import_stream(Path("data.json")):
     process(record)
 ```
 
+### Markdown (`A.core.markdown_parser`)
+
+| Function | Description |
+|----------|-------------|
+| `render_markdown(text: str, escape: bool = True) -> str` | Render markdown to HTML |
+| `get_parser() -> mistune.Markdown` | Get configured parser |
+
+**Syntax highlighting:** Uses Pygments for code blocks:
+
+```python
+from A.core.markdown_parser import render_markdown
+
+# Basic rendering
+html = render_markdown("# Hello\n\nWorld")
+
+# With syntax highlighting (escape=False for trusted content)
+md = "```python\nx = 1\n```"
+html = render_markdown(md, escape=False)
+```
+
+### Markdown HTML Preview (`A.core.markdown_html_view`)
+
+| Function | Description |
+|----------|-------------|
+| `preview_markdown(text, use_cache, open_browser, title) -> Path` | Render and open in browser |
+| `preview_html(html, open_browser, title) -> Path` | Open HTML directly |
+| `clear_cache() -> int` | Clear cached HTML files |
+| `get_cache_dir() -> Path` | Get cache directory |
+
+```python
+from A.core.markdown_html_view import preview_markdown, preview_html
+
+# Render markdown and open in browser
+path = preview_markdown("# Notes\n\nContent here", open_browser=True)
+
+# Or open raw HTML
+path = preview_html("<h1>Custom</h1>", open_browser=True)
+```
+
+**Features:**
+- File-based caching (lazy render)
+- Opens in default browser via `webbrowser.open()`
+- Cache in `~/.cache/A/markdown/`
+
 ### Plugin Contract
 
 Plugins must register via entry points:

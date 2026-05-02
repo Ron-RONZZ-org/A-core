@@ -27,6 +27,7 @@ Esperanto-native CLI framework with plugin support.
 - Full-text search via SQLite FTS5
 - Text normalization (French ligatures, accents)
 - Fuzzy search with rapidfuzz (optional)
+- **Markdown rendering with HTML preview**
 - Undo system for operations tracking (add/modify/delete)
 - Import/export with AES-256 encryption (optional)
 - Minimal, calm output
@@ -86,6 +87,44 @@ service.search_advanced("query", fuzzy=True)  # Combined search
 **Install with fuzzy search:**
 ```bash
 pip install A-core[search]  # Adds rapidfuzz for fast fuzzy matching
+```
+
+## Markdown Rendering
+
+A-core provides markdown rendering with HTML preview:
+
+```python
+from A import render_markdown, preview_markdown, preview_html
+
+# Render markdown to HTML
+html = render_markdown("# Hello\n\nWorld with `code`")
+# Returns: <h1>Hello</h1><p>World with <code>code</code></p>
+
+# With syntax highlighting (pygments)
+md = """```python
+def hello():
+    print("world")
+```"""
+html = render_markdown(md, escape=False)
+# Returns HTML with Pygments syntax highlighting
+
+# Preview in browser (opens in default browser)
+preview_markdown("# My Notes", open_browser=True)
+
+# Or preview raw HTML
+preview_html("<h1>Custom</h1>", open_browser=True)
+```
+
+**Features:**
+- mistune for fast markdown parsing
+- Pygments for syntax highlighting
+- File-based caching for performance
+- Lazy render (only when requested)
+- Opens in browser via `webbrowser.open()`
+
+**Install:**
+```bash
+pip install A-core  # Includes mistune + pygments
 ```
 
 ## Undo System
