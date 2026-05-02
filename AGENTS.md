@@ -567,3 +567,7 @@ A_myplugin/
 ├── pyproject.toml         # Entry point registration
 └── AGENTS.md
 ```
+
+## Branch Convention
+
+All A-* repos use `main` as the primary branch. Use `main` for all development.

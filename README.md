@@ -270,3 +270,6 @@ See the documentation for plugin development:
 ## Background
 
 A was born from personal need. See [0-WHY-AUTISH.md](./0-WHY-AUTISH.md) for the full story.
+---
+
+**Branch:** Use `main` for all development.
