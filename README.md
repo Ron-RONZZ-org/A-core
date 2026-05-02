@@ -28,6 +28,7 @@ Esperanto-native CLI framework with plugin support.
 - Text normalization (French ligatures, accents)
 - Fuzzy search with rapidfuzz (optional)
 - Undo system for operations tracking (add/modify/delete)
+- Import/export with AES-256 encryption (optional)
 - Minimal, calm output
 - Shared utilities (i18n, output, subprocess)
 
@@ -114,6 +115,49 @@ result = service.undo()
 - Automatic tracking of create/update/delete operations
 - Timestamps for each operation
 - Optional DB persistence for crash recovery
+
+## Import/Export
+
+A-core provides import/export with optional AES-256 encryption:
+
+```python
+from A.core import export_json, import_json, encrypt, decrypt
+
+# Export to JSON
+data = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+export_json(data, Path("export.json"))
+
+# Encrypted export
+export_json(data, Path("export.enc"), encryption_password="secret")
+
+# Import
+records = import_json(Path("export.json"))
+
+# Auto-detect format and decrypt
+records = import_json(Path("export.enc"), decryption_password="secret")
+```
+
+**Encryption:**
+- AES-256-GCM (authenticated encryption)
+- PBKDF2-HMAC-SHA256 key derivation (600k iterations)
+- Random salt + nonce per encryption
+
+**Streaming:** For large datasets, use generators:
+
+```python
+from A.core.export import export_json_stream
+
+def record_generator():
+    for i in range(100000):
+        yield {"id": i, "data": f"item-{i}"}
+
+export_json_stream(record_generator(), Path("large.json"))
+```
+
+**Install with encryption:**
+```bash
+pip install A-core  # Includes cryptography
+```
 
 ## Usage
 
