@@ -124,9 +124,23 @@ Plugins register via Python entry points:
 ```toml
 [project.entry-points."A.commands"]
 tempo = "A_tempo.cli:app"
+sistemo = "A_sistemo.cli:app"
 ```
 
 A plugin **must** export a `typer.Typer` instance as `app`.
+
+---
+
+## Example Plugins
+
+Reference implementations for plugin developers:
+
+| Plugin | Repository | Description |
+|--------|------------|-------------|
+| A-tempo | [A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/) | Time/clock with i18n |
+| A-sistemo | [A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/) | System management (wifi, usb, disko) |
+
+**Use these as reference** when building new plugins.
 
 ---
 

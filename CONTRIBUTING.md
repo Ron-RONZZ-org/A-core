@@ -28,9 +28,16 @@ poetry run ruff format src/
 ## Adding a Plugin
 
 See the documentation for plugin development:
-- [English](./en/index.md)
+- [English](./docs/en/index.md)
 - [Esperanto](./eo/index.md)
 - [Français](./fr/index.md)
+
+### Reference Plugins
+
+Two working plugins you can study:
+
+1. **[A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/)** — Time/clock, simplest plugin
+2. **[A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/)** — System management (wifi, usb, disko, bluetooth)
 
 ## Code Style
 
