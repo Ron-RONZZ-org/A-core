@@ -170,6 +170,14 @@ All new code must include tests.
 
 ---
 
+## Shell Integrations
+
+Some features are better handled as shell aliases rather than plugins. See issue [#3](https://github.com/Ron-RONZZ-org/A-core/issues/3) for rationale.
+
+**kp (clipboard):** Use `xclip`, `xsel`, `pbcopy` directly instead of creating a 60-line wrapper plugin.
+
+---
+
 ## Commit Message Format
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
