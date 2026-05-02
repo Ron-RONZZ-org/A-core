@@ -1,6 +1,31 @@
 [build-system]
-requires = ["poetry-core>=2.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "A-core"
+version = "0.1.0"
+description = "A CLI framework core - minimal, modular, accessible"
+readme = "README.md"
+license = "GPL-3.0-only"
+authors = [{name = "Ron", email = "ron@example.com"}]
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+A = "A.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/A"]
 
 [tool.poetry]
 name = "A-core"
@@ -8,20 +33,11 @@ version = "0.1.0"
 description = "A CLI framework core - minimal, modular, accessible"
 readme = "README.md"
 license = "GPL-3.0-only"
-authors = ["Ron <ron@example.com>"]
-classifiers = [
-    "Development Status :: 1 - Planning",
-    "Environment :: Console",
-    "Intended Audience :: End Users/Desktop",
-    "Operating System :: POSIX :: Linux",
-    "Topic :: Utilities",
-]
-packages = [{ include = "A", from = "src" }]
+authors = ["Ron <ron@example>"]
+packages = [{include = "A", from = "src"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<4.0"
-typer = ">=0.12"
-rich = ">=13"
+python = "^3.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8"
