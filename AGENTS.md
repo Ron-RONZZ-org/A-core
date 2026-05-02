@@ -433,6 +433,46 @@ encrypted = encrypt(plaintext, "password")
 decrypted = decrypt(encrypted, "password")
 ```
 
+### Keyring (`A.core.keyring`)
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `get_password(service, key)` | `str \| None` | Retrieve password from system keyring |
+| `set_password(service, key, password)` | `bool` | Store password in system keyring |
+| `delete_password(service, key)` | `bool` | Remove password from system keyring |
+
+**Service pattern:** Use ``"app_name/identifier"`` as service name, ``"password"`` as key.
+
+```python
+from A.core.keyring import get_password, set_password, delete_password
+
+# Store
+set_password("A-lien/abc-123", "password", "sekret123")
+
+# Retrieve
+pw = get_password("A-lien/abc-123", "password")
+
+# Delete
+delete_password("A-lien/abc-123", "password")
+```
+
+**Graceful fallback:** All functions return ``None``/``False`` when the ``keyring`` library is not installed. Handle this in application code:
+
+```python
+from A.core.keyring import get_password
+
+if pw := get_password("myapp/db", "password"):
+    # use the password
+else:
+    # keyring unavailable — prompt user or use alternative
+```
+
+Install the optional dependency with:
+
+```bash
+pip install A-core[keyring]
+```
+
 ### Export (`A.core.export`)
 
 | Function | Description |

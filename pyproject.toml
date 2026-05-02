@@ -25,6 +25,7 @@ dev = [
     "ruff>=0.4.0",
 ]
 search = ["rapidfuzz>=3.0"]
+keyring = ["keyring>=24.0.0"]
 
 [project.scripts]
 A = "A.cli:main"

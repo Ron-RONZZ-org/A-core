@@ -6,6 +6,7 @@ from A.core.i18n import tr, set_language, available_languages, get_current_langu
 from A.core.exceptions import AError, ConfigError, PluginError, DataError, CommandError
 from A.core.config import load_config, save_config, Config, get_setting, set_setting, load_profile, save_profile, export_profile, import_profile
 from A.core.crypto import encrypt, decrypt, encrypt_str, decrypt_str
+from A.core.keyring import get_password, set_password, delete_password
 from A.core.export import export_json, export_toml, export_json_stream, export_toml_stream
 from A.core.import_ import import_json, import_toml, import_auto, import_stream
 from A.core.markdown_parser import render_markdown
@@ -47,6 +48,10 @@ __all__ = [
     "decrypt",
     "encrypt_str",
     "decrypt_str",
+    # Keyring
+    "get_password",
+    "set_password",
+    "delete_password",
     # Export
     "export_json",
     "export_toml",
