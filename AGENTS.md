@@ -1,4 +1,5 @@
 # AGENTS.md — Root Project Rules for A-core
+This file extends [A-workspace](./workspace/AGENTS.md).
 
 This is the canonical, repo-wide instruction file for AI agents working on **A-core**.
 

@@ -1,5 +1,9 @@
 # A-core
 
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+
 A - minimuma CLI kadro / A - minimal CLI framework
 
 Esperanto-native CLI framework with plugin support.
@@ -72,15 +76,31 @@ Instead of a plugin, use your terminal's clipboard tools directly:
 
 ```bash
 # Linux (xclip)
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
 alias kp='xclip -selection clipboard'
 
 # Linux (xsel)
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
 alias kp='xsel --clipboard --input'
 
 # macOS
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
 alias kp='pbcopy'
 
 # Usage
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
 A sistemo | kp    # Copy output to clipboard
 ```
 
