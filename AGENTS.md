@@ -250,6 +250,43 @@ Supported languages: `eo` (Esperanto), `en` (English), `fr` (French)
 | `export_profile(path: Path) -> None` | — | Export to JSON file |
 | `import_profile(path: Path) -> None` | — | Import from JSON file |
 
+### Service Layer (`A.core.service`)
+
+| Class/Function | Description |
+|---------------|-------------|
+| `CRUDService` | CRUD with soft-delete, undo |
+| `create_service(name, table)` | Factory function |
+
+### CRUDService Methods
+
+| Method | Description |
+|-------|-------------|
+| `list(order_by, desc, limit)` | List entries |
+| `get(uuid)` | Get by UUID |
+| `get_by_field(field, value)` | Get by field |
+| `search(field, query)` | Search |
+| `create(data)` | Create with auto uuid/timestamp |
+| `update(uuid, data)` | Update with timestamp |
+| `delete(uuid, soft)` | Delete (soft/permanent) |
+| `restore(uuid)` | Restore from trash |
+| `empty_trash(days)` | Cleanup trash |
+| `push_undo(op, data)` | Undo stack |
+| `load_undo_stack()` | Load undo stack |
+
+```python
+# Example
+from A.core.service import CRUDService
+from A.data import SQLiteDB
+
+db = SQLiteDB("vorto.db")
+words = CRUDService(db, "vorto")
+
+words.create({"teksto": "hello"})
+words.list()
+words.delete(uuid, soft=True)
+words.restore(uuid)
+```
+
 ### Plugin Contract
 
 Plugins must register via entry points:
