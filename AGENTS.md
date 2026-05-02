@@ -137,8 +137,13 @@ Reference implementations for plugin developers:
 
 | Plugin | Repository | Description |
 |--------|------------|-------------|
-| A-tempo | [A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/) | Time/clock with i18n |
-| A-sistemo | [A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/) | System management (wifi, usb, disko) |
+| A-tempo | [A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/) | Time/clock - simplest plugin |
+| A-sistemo | [A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/) | System management |
+| A-vorto | [A-vorto](https://github.com/Ron-RONZZ-org/A-vorto/) | Wordbook - SQLite CRUD |
+| A-encik | [A-encik](https://github.com/Ron-RONZZ-org/A-encik/) | Knowledge + Wikidata |
+| A-organizi | [A-organizi](https://github.com/Ron-RONZZ-org/A-organizi/) | Calendar+todo+journal |
+| A-lien | [A-lien](https://github.com/Ron-RONZZ-org/A-lien/) | Email+contacts |
+| A-medio | [A-medio](https://github.com/Ron-RONZZ-org/A-medio/) | Video+photo+audio |
 
 **Use these as reference** when building new plugins.
 

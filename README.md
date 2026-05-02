@@ -55,7 +55,12 @@ pip install A-sistemo       # System management
 | Plugin | Description |
 |--------|-------------|
 | [A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/) | Time and clock |
-| [A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/) | System management |
+| [A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/) | System management (wifi, usb, disko, bluetooth) |
+| [A-vorto](https://github.com/Ron-RONZZ-org/A-vorto/) | Wordbook / vocabulary |
+| [A-encik](https://github.com/Ron-RONZZ-org/A-encik/) | Knowledge management |
+| [A-organizi](https://github.com/Ron-RONZZ-org/A-organizi/) | Calendar, todo, journal |
+| [A-lien](https://github.com/Ron-RONZZ-org/A-lien/) | Email and contacts |
+| [A-medio](https://github.com/Ron-RONZZ-org/A-medio/) | Video, photo, audio |
 
 ## Developing Plugins
 

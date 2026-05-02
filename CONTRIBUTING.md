@@ -34,10 +34,15 @@ See the documentation for plugin development:
 
 ### Reference Plugins
 
-Two working plugins you can study:
+Seven working plugins you can study:
 
 1. **[A-tempo](https://github.com/Ron-RONZZ-org/A-tempo/)** — Time/clock, simplest plugin
 2. **[A-sistemo](https://github.com/Ron-RONZZ-org/A-sistemo/)** — System management (wifi, usb, disko, bluetooth)
+3. **[A-vorto](https://github.com/Ron-RONZZ-org/A-vorto/)** — Wordbook with SQLite
+4. **[A-encik](https://github.com/Ron-RONZZ-org/A-encik/)** — Knowledge management with Wikidata
+5. **[A-organizi](https://github.com/Ron-RONZZ-org/A-organizi/)** — Calendar, todo, journal
+6. **[A-lien](https://github.com/Ron-RONZZ-org/A-lien/)** — Email and contacts
+7. **[A-medio](https://github.com/Ron-RONZZ-org/A-medio/)** — Video, photo, audio
 
 ## Code Style
 
