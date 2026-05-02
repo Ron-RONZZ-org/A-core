@@ -78,10 +78,15 @@ class SQLiteDB:
             conn.close()
 
     def execute(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-        """Execute SQL and return results as dicts."""
+        """Execute SQL and return results as dicts.
+
+        Auto-commits for DML statements. DDL statements are auto-committed
+        by SQLite regardless.
+        """
         with self._connection() as conn:
             cursor = conn.execute(sql, params or ())
             rows = cursor.fetchall()
+            conn.commit()
             return [dict(r) for r in rows]
     
     def execute_one(self, sql: str, params: tuple = ()) -> dict[str, Any] | None:

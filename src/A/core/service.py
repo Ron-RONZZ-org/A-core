@@ -135,15 +135,25 @@ class CRUDService:
         self.db.execute(sql, params)
 
     def _remove_from_fts(self, uuid: str) -> None:
-        """Remove an entry from FTS5 index."""
+        """Remove an entry from FTS5 index.
+
+        Uses a DELETE statement against the FTS content table, which is
+        safer than the ``'delete'`` command variant when the content
+        table row may have already been moved or deleted (e.g. soft
+        delete to trash table).
+        """
         if not self._fts_config:
             return
-        self.db.execute(
-            f"INSERT INTO {self._fts_config.fts_table}"
-            f"({self._fts_config.fts_table}, rowid) "
-            f"VALUES('delete', "
-            f"(SELECT rowid FROM {self.table} WHERE uuid = ?))",
+        # Look up rowid first to avoid passing NULL to FTS5
+        row = self.db.execute_one(
+            f"SELECT rowid FROM {self.table} WHERE uuid = ?",
             (uuid,)
+        )
+        if not row or row.get("rowid") is None:
+            return
+        self.db.execute(
+            f"DELETE FROM {self._fts_config.fts_table} WHERE rowid = ?",
+            (row["rowid"],)
         )
 
     # --- Basic List/Get/Search ---
@@ -412,6 +422,10 @@ class CRUDService:
         entry = self.get(uuid)
         if not entry:
             return
+
+        # Remove from FTS before moving to trash
+        if self._fts_config:
+            self._remove_from_fts(uuid)
 
         # Add deletion timestamp
         entry["forigita_je"] = datetime.now(timezone.utc).isoformat()
