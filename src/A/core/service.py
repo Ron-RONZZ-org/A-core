@@ -449,10 +449,8 @@ class CRUDService:
 
         with self.db.transaction() as conn:
             conn.execute(insert_sql, values)
-
-        # Delete from trash
-        delete_sql = f"DELETE FROM {self._trash_table} WHERE uuid = ?"
-        conn.execute(delete_sql, (uuid,))
+            # Delete from trash inside the same transaction
+            conn.execute(f"DELETE FROM {self._trash_table} WHERE uuid = ?", (uuid,))
 
         return entry
 
