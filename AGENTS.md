@@ -215,18 +215,48 @@ from A.core import (
 | `config_dir() -> Path` | `~/.config/A` | User config directory |
 | `cache_dir() -> Path` | `~/.cache/A` | User cache directory |
 | `state_dir() -> Path` | `~/.local/state/A` | User state directory |
-| `ensure_dirs() -> None` | — | Create all directories |
+$1
+
+**`ensure_dirs` usage:**
+```python
+from A.core.paths import ensure_dirs, data_dir
+
+# Create all A directories (data, config, cache, state)
+ensure_dirs()
+
+# Create a specific directory (e.g., plugin data dir)
+my_data_dir = data_dir() / "my_plugin"
+ensure_dirs(my_data_dir)
+```
 
 ### i18n (`A.core.i18n`)
 
 | Function | Returns | Description |
 |----------|---------|-------------|
 | `tr(key: str, lang: str = None) -> str` | Translated string | Translate key (falls back to English) |
+| `tr_multi(eo: str, en: str = None, fr: str = None) -> str` | Translated string | Inline translation for current language |
 | `set_language(lang: str) -> None` | — | Set current language |
 | `available_languages() -> list[str]` | `["eo", "en", "fr"]` | Get supported languages |
 | `get_current_language() -> str` | Language code | Get current language |
 
 Supported languages: `eo` (Esperanto), `en` (English), `fr` (French)
+
+**Usage:**
+```python
+from A import tr, tr_multi
+
+# Dictionary lookup (existing behavior)
+help_text = tr("help")  # Returns "Helpo" in eo, "Help" in en
+
+# Inline translation (new - for plugin help text)
+app = typer.Typer(
+    help=tr_multi(
+        "Encik — persona sci-mastruma mikroapo.",           # eo
+        "Encik — personal knowledge management microapp.",   # en
+        "Encik — microapplication de gestion de connaissances." # fr
+    )
+)
+```
 
 ### Exceptions (`A.core.exceptions`)
 
@@ -250,6 +280,44 @@ Supported languages: `eo` (Esperanto), `en` (English), `fr` (French)
 | `save_profile(data: dict) -> None` | — | Save full profile |
 | `export_profile(path: Path) -> None` | — | Export to JSON file |
 | `import_profile(path: Path) -> None` | — | Import from JSON file |
+
+### Data Layer (`A.data`)
+
+```python
+from A.data import SQLiteDB
+from pathlib import Path
+
+# Basic usage with name (creates ~/.local/share/A/mydb.db)
+db = SQLiteDB("mydb")
+db.execute("SELECT * FROM table")        # -> list[dict]
+db.execute_one("SELECT * FROM table")   # -> dict | None
+db.transaction()                          # context manager
+
+# With full Path (for plugins that define custom paths)
+db = SQLiteDB(Path.home() / ".local" / "share" / "A" / "encik.db")
+
+# With schema (tables created automatically if not exist)
+schema = {
+    "words": "CREATE TABLE words (id INTEGER PRIMARY KEY, text TEXT)"
+}
+db = SQLiteDB("vorto", schema)
+```
+
+**SQLiteDB Constructor:**
+- `name_or_path: str | Path` - Database name (e.g., "tempo") or full Path
+- `schema: dict[str, str]` - Optional dict of table_name → CREATE TABLE SQL
+
+**Methods:**
+- `execute(sql, params) -> list[dict]` - Execute SQL, return all rows
+- `execute_one(sql, params) -> dict | None` - Execute SQL, return first row
+- `execute_many(sql, params_list) -> None` - Execute SQL with multiple param sets
+- `transaction()` - Context manager for auto-commit transactions
+
+**Features:**
+- WAL mode enabled by default
+- Foreign keys enabled
+- Returns rows as dicts (sqlite3.Row factory)
+- Schema applied idempotently (only creates tables that don't exist)
 
 ### Service Layer (`A.core.service`)
 
@@ -279,7 +347,7 @@ Supported languages: `eo` (Esperanto), `en` (English), `fr` (French)
 from A.core.service import CRUDService
 from A.data import SQLiteDB
 
-db = SQLiteDB("vorto.db")
+db = SQLiteDB("vorto")
 words = CRUDService(db, "vorto")
 
 words.create({"teksto": "hello"})

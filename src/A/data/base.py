@@ -11,24 +11,36 @@ from A.core.paths import data_dir
 class SQLiteDB:
     """Base SQLite database with WAL mode."""
     
-    def __init__(self, name: str, schema: dict[str, str] = None):
+    def __init__(self, name_or_path: str | Path, schema: dict[str, str] = None):
         """
         Args:
-            name: Database name (e.g., "tempo")
+            name_or_path: Database name (e.g., "tempo") or full Path
             schema: dict of table_name -> CREATE TABLE SQL
         """
-        self.path = data_dir() / f"{name}.db"
+        if isinstance(name_or_path, Path):
+            self.path = name_or_path
+        else:
+            self.path = data_dir() / f"{name_or_path}.db"
         self._schema = schema or {}
         
-        # Initialize schema if this is a new database
-        if schema and not self.path.exists():
+        # Ensure parent directory exists
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize schema if provided
+        if schema:
             self._init_schema()
     
     def _init_schema(self) -> None:
-        """Initialize database schema."""
+        """Initialize database schema if tables don't exist."""
         with self._connection() as conn:
             for table, sql in self._schema.items():
-                conn.execute(sql)
+                # Check if table exists before creating
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,)
+                )
+                if cursor.fetchone() is None:
+                    conn.execute(sql)
             conn.commit()
     
     @contextmanager
