@@ -5,8 +5,15 @@ Evidence-based design from autish-legacy (vorto_repo.py).
 Usage:
     from A.core.service import CRUDService
     from A.data import SQLiteDB
+    from A.data.search import FTSConfig
 
+    # With FTS5 search
+    config = FTSConfig(table="vorto", fts_columns=["teksto"])
     db = SQLiteDB("vorto.db")
+    words = CRUDService(db, "vorto", fts_config=config)
+    words.search_fts("hello")
+
+    # Without FTS5
     words = CRUDService(db, "vorto")
     words.list()
 """
@@ -19,27 +26,93 @@ from datetime import datetime, timezone
 from typing import Any
 
 from A.data.base import SQLiteDB
+from A.data.search import FTSConfig, build_fts_schema, build_search_query, build_index_sql
 
 
 class CRUDService:
     """CRUD operations with soft-delete and undo support.
-    
+
     Evidence-based from autish-legacy vorto_repo.py:
     - list, get, create, update, delete
     - Soft delete (rubujo table)
     - Undo stack
     - Auto timestamps (kreita_je, modifita_je)
+
+    Extended with optional FTS5 full-text search.
     """
 
-    def __init__(self, db: SQLiteDB, table: str):
+    def __init__(
+        self,
+        db: SQLiteDB,
+        table: str,
+        fts_config: FTSConfig | None = None,
+    ):
         """
         Args:
             db: SQLiteDB instance
             table: Table name for CRUD operations
+            fts_config: Optional FTS5 configuration for full-text search
         """
         self.db = db
         self.table = table
         self._trash_table = f"{table}_rubujo"
+        self._fts_config = fts_config
+
+        if fts_config:
+            self._ensure_fts()
+
+    # --- FTS5 Methods ---
+
+    def _ensure_fts(self) -> None:
+        """Create FTS5 schema and populate if empty."""
+        for stmt in build_fts_schema(self._fts_config):
+            self.db.execute(stmt)
+
+        # Populate FTS if empty
+        count = self.db.execute_one(
+            f"SELECT COUNT(*) AS cnt FROM {self._fts_config.fts_table}"
+        )
+        if count and count["cnt"] == 0:
+            self._rebuild_fts()
+
+    def _rebuild_fts(self) -> None:
+        """Rebuild the entire FTS index from main table."""
+        self.db.execute(
+            f"INSERT INTO {self._fts_config.fts_table}"
+            f"({self._fts_config.fts_table}) VALUES('rebuild')"
+        )
+
+    def _index_fts(self, uuid: str) -> None:
+        """Index a single entry in FTS5."""
+        if not self._fts_config:
+            return
+        # Get current values for FTS columns
+        entry = self.db.execute_one(
+            f"SELECT rowid, uuid, "
+            f"{', '.join(self._fts_config.fts_columns)} "
+            f"FROM {self.table} WHERE uuid = ?",
+            (uuid,)
+        )
+        if not entry:
+            return
+        sql, params = build_index_sql(
+            self._fts_config, uuid, dict(entry), entry["rowid"]
+        )
+        self.db.execute(sql, params)
+
+    def _remove_from_fts(self, uuid: str) -> None:
+        """Remove an entry from FTS5 index."""
+        if not self._fts_config:
+            return
+        self.db.execute(
+            f"INSERT INTO {self._fts_config.fts_table}"
+            f"({self._fts_config.fts_table}, rowid) "
+            f"VALUES('delete', "
+            f"(SELECT rowid FROM {self.table} WHERE uuid = ?))",
+            (uuid,)
+        )
+
+    # --- Basic List/Get/Search ---
 
     def list(
         self,
@@ -76,6 +149,139 @@ class CRUDService:
             sql = f"SELECT * FROM {self.table} WHERE LOWER({field}) LIKE LOWER(?)"
         return self.db.execute(sql, (f"%{query}%",))
 
+    # --- Advanced Search Methods ---
+
+    def search_fts(
+        self,
+        query: str,
+        filters: dict[str, str] | None = None,
+        order_by: str = "relevance",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Full-text search via FTS5 with filters and sorting.
+
+        Args:
+            query: Search text (normalized automatically)
+            filters: Exact match filters e.g. {"lingvo": "fr", "kategorio": "verbo"}
+            order_by: "relevance" (BM25), "date", "date_asc", or column name
+            limit: Max results
+            offset: Pagination offset
+
+        Returns:
+            List of matching entries from main table
+
+        Raises:
+            ValueError: If FTS5 is not configured on this service
+        """
+        if not self._fts_config:
+            raise ValueError(
+                "FTS5 not configured for this service. "
+                "Pass fts_config to constructor."
+            )
+
+        try:
+            sql, params = build_search_query(
+                self._fts_config, query, filters, order_by, limit, offset
+            )
+            return self.db.execute(sql, tuple(params))
+        except Exception:
+            # Fallback: LIKE search on first indexed column
+            fallback_field = self._fts_config.fts_columns[0]
+            return self.search(fallback_field, query, case_sensitive=False)[:limit]
+
+    def search_fuzzy(
+        self,
+        query: str,
+        field: str = "",
+        threshold: float = 0.62,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Fuzzy search using rapidfuzz (optional) with difflib fallback.
+
+        Args:
+            query: Search text
+            field: Column to search (if empty, uses first FTS column or "teksto")
+            threshold: Minimum similarity score (0.0-1.0)
+            limit: Max results
+        """
+        # First pass: get candidates via FTS5 (fast narrowing)
+        candidates = []
+        if self._fts_config:
+            candidates = self.search_fts(query, limit=limit * 3)
+        else:
+            target_field = field or "teksto"
+            candidates = self.search(target_field, query, case_sensitive=False)[:limit * 3]
+
+        if not candidates:
+            return []
+
+        # Try rapidfuzz (optional)
+        try:
+            from rapidfuzz import fuzz, process
+            from A.utils.normalize import fold_search_text
+
+            target_field = field or (
+                self._fts_config.fts_columns[0] if self._fts_config else "teksto"
+            )
+            texts = [str(e.get(target_field, "")) for e in candidates]
+            folded_query = fold_search_text(query)
+            folded_texts = [fold_search_text(t) for t in texts]
+
+            results = process.extract(
+                folded_query,
+                folded_texts,
+                scorer=fuzz.ratio,
+                limit=limit,
+                score_cutoff=threshold * 100,  # rapidfuzz uses 0-100 scale
+            )
+
+            return [candidates[idx] for _, idx, _ in results]
+        except ImportError:
+            # Fall back to difflib (stdlib but slower)
+            from difflib import SequenceMatcher
+
+            target_field = field or (
+                self._fts_config.fts_columns[0] if self._fts_config else "teksto"
+            )
+            scored = []
+            for entry in candidates:
+                text = str(entry.get(target_field, ""))
+                score = SequenceMatcher(
+                    None, query.casefold(), text.casefold()
+                ).ratio()
+                if score >= threshold:
+                    scored.append((score, entry))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [entry for _, entry in scored[:limit]]
+
+    def search_advanced(
+        self,
+        query: str = "",
+        filters: dict[str, str] | None = None,
+        fuzzy: bool = False,
+        order_by: str = "relevance",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Combined search: FTS5 + filters + optional fuzzy scoring.
+
+        Priority:
+        1. FTS5 (fast, built-in)
+        2. Optional fuzzy re-ranking (rapidfuzz if available)
+        3. LIKE fallback
+        """
+        if not query and not filters:
+            return self.list(order_by="kreita_je", desc=True, limit=limit)
+
+        results = self.search_fts(query, filters, order_by, limit)
+
+        if fuzzy and results and query:
+            results = self.search_fuzzy(query, limit=limit)
+
+        return results
+
+    # --- CRUD Operations ---
+
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         """Create a new entry with auto-generated UUID and timestamp."""
         now = datetime.now(timezone.utc).isoformat()
@@ -92,6 +298,10 @@ class CRUDService:
         with self.db.transaction() as conn:
             conn.execute(sql, values)
 
+        # FTS indexing after successful insert
+        if self._fts_config:
+            self._index_fts(data["uuid"])
+
         return data
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -105,11 +315,16 @@ class CRUDService:
         with self.db.transaction() as conn:
             conn.execute(sql, values)
 
+        # Re-index in FTS
+        if self._fts_config:
+            self._remove_from_fts(uuid)
+            self._index_fts(uuid)
+
         return {**self.get(uuid), **data}
 
     def delete(self, uuid: str, soft: bool = True) -> None:
         """Delete an entry.
-        
+
         Args:
             uuid: Entry UUID
             soft: If True, move to trash table (rubujo). If False, permanent delete.
@@ -117,6 +332,9 @@ class CRUDService:
         if soft:
             self._move_to_trash(uuid)
         else:
+            # Remove from FTS before hard delete
+            if self._fts_config:
+                self._remove_from_fts(uuid)
             sql = f"DELETE FROM {self.table} WHERE uuid = ?"
             with self.db.transaction() as conn:
                 conn.execute(sql, (uuid,))

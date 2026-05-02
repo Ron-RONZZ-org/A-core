@@ -64,7 +64,19 @@ class SQLiteDB:
         with self._connection() as conn:
             yield conn
             conn.commit()
-    
+
+    @contextmanager
+    def raw_connection(self):
+        """Get raw sqlite3 connection (for operations needing lastrowid, etc.)."""
+        conn = sqlite3.connect(self.path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     def execute(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
         """Execute SQL and return results as dicts."""
         with self._connection() as conn:

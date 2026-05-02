@@ -24,6 +24,9 @@ Esperanto-native CLI framework with plugin support.
 - Esperanto as primary language (eo, en, fr)
 - Plugin discovery via entry points
 - SQLite data layer with WAL mode
+- Full-text search via SQLite FTS5
+- Text normalization (French ligatures, accents)
+- Fuzzy search with rapidfuzz (optional)
 - Minimal, calm output
 - Shared utilities (i18n, output, subprocess)
 
@@ -39,15 +42,49 @@ A is a plugin-based framework. **A-core** provides the foundation:
 
 ```
 A-core (this package)
-├── core/       # Zero dependencies (types, paths, i18n, config)
-├── data/      # SQLite base classes
-└── utils/     # Output, subprocess, editor helpers
+├── core/       # Zero dependencies (types, paths, i18n, config, service)
+├── data/      # SQLite base classes, FTS5 search
+└── utils/     # Output, subprocess, editor, text normalization
 ```
 
 **Plugin dependencies on A-core:**
-- `A` package imports (i18n, output, subprocess)
+- `A` package imports (i18n, output, subprocess, search)
 - Entry point registration
 - Shared SQLite utilities with WAL mode
+- FTS5 full-text search (optional)
+
+## Search & Normalization
+
+A-core provides built-in full-text search via SQLite FTS5:
+
+```python
+from A.core.service import CRUDService
+from A.data.search import FTSConfig
+from A.utils.normalize import fold_search_text
+
+# Configure FTS5
+config = FTSConfig(
+    table="words",
+    fts_columns=["text"],
+    normalize={"text": fold_search_text},
+)
+
+# Create service with search
+service = CRUDService(db, "words", fts_config=config)
+service.search_fts("query")              # Full-text search
+service.search_fuzzy("heelo", 0.8)        # Fuzzy matching (rapidfuzz)
+service.search_advanced("query", fuzzy=True)  # Combined search
+```
+
+**Text normalization** handles French ligatures:
+- `œ` → `oe`, `Œ` → `OE`
+- `æ` → `ae`, `Æ` → `AE`
+- Accent stripping via NFKD
+
+**Install with fuzzy search:**
+```bash
+pip install A-core[search]  # Adds rapidfuzz for fast fuzzy matching
+```
 
 ## Usage
 
@@ -85,78 +122,28 @@ Some features are better handled as shell aliases rather than plugins:
 
 Instead of a plugin, use your terminal's clipboard tools directly:
 
+| OS | Command |
+|---|---------|
+| Linux (xclip) | `xclip -selection clipboard` |
+| Linux (xsel) | `xsel --clipboard --input` |
+| macOS | `pbcopy` |
+| Windows | `clip` |
+
+**Add to shell config:**
+
 ```bash
-# Linux (xclip)
-
-## Context
-
-This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
-
-
-```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
-# Or if already cloned:
-git submodule update --init --recursive
+# ~/.bashrc or ~/.zshrc
+alias kp='xclip -selection clipboard'  # Linux
+# or
+alias kp='xsel --clipboard --input'     # Linux alternative
+alias kp='pbcopy'                     # macOS
+alias kp='clip'                       # Windows
 ```
 
-**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
-
-alias kp='xclip -selection clipboard'
-
-# Linux (xsel)
-
-## Context
-
-This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
-
+**Usage:**
 
 ```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
-# Or if already cloned:
-git submodule update --init --recursive
-```
-
-**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
-
-alias kp='xsel --clipboard --input'
-
-# macOS
-
-## Context
-
-This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
-
-
-```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
-# Or if already cloned:
-git submodule update --init --recursive
-```
-
-**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
-
-alias kp='pbcopy'
-
-# Usage
-
-## Context
-
-This module uses [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) as a **git submodule**:
-
-
-```bash
-# Clone with submodules
-git clone --recurse-submodules https://github.com/Ron-RONZZ-org/A-core.git
-# Or if already cloned:
-git submodule update --init --recursive
-```
-
-**DO NOT edit workspace/ directly** - see [A-workspace](https://github.com/Ron-RONZZ-org/A-workspace) for master context.
-
-A sistemo | kp    # Copy output to clipboard
+A sistemo info | kp    # Copy output to clipboard
 ```
 
 This avoids a 60-line wrapper for a single shell command.
