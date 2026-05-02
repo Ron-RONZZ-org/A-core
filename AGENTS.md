@@ -1,4 +1,5 @@
 # AGENTS.md — Root Project Rules for A-core
+This file extends [A-workspace](./workspace/AGENTS.md).
 
 This is the canonical, repo-wide instruction file for AI agents working on **A-core**.
 
@@ -173,3 +174,146 @@ All new code must include tests.
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 - `feat:`, `fix:`, `docs:`, `test:`, `refactor:`
+
+---
+
+## API Reference
+
+This section documents all public APIs in A-core. Plugins import from `A.core`.
+
+### Core Module (`from A.core import ...`)
+
+```python
+from A.core import (
+    # Types
+    CommandResult, PluginInfo, Config,
+    # Paths
+    data_dir, config_dir, cache_dir, state_dir, ensure_dirs,
+    # i18n
+    tr, set_language, available_languages, get_current_language,
+    # Exceptions
+    AError, ConfigError, PluginError, DataError, CommandError,
+    # Config
+    load_config, save_config, get_setting, set_setting,
+    load_profile, save_profile, export_profile, import_profile,
+)
+```
+
+### Types (`A.core.types`)
+
+| Class | Description | Fields |
+|-------|-------------|--------|
+| `CommandResult` | Result from command execution | `success: bool`, `message: str`, `data: dict` |
+| `PluginInfo` | Registered plugin info | `name: str`, `version: str`, `description: str`, `cli: object` |
+| `Config` | User configuration | `language: str`, `verbose: bool`, `plugins: list`, `aliases: dict`, `settings: dict` |
+
+### Paths (`A.core.paths`)
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `data_dir() -> Path` | `~/.local/share/A` | User data directory |
+| `config_dir() -> Path` | `~/.config/A` | User config directory |
+| `cache_dir() -> Path` | `~/.cache/A` | User cache directory |
+| `state_dir() -> Path` | `~/.local/state/A` | User state directory |
+| `ensure_dirs() -> None` | — | Create all directories |
+
+### i18n (`A.core.i18n`)
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `tr(key: str, lang: str = None) -> str` | Translated string | Translate key (falls back to English) |
+| `set_language(lang: str) -> None` | — | Set current language |
+| `available_languages() -> list[str]` | `["eo", "en", "fr"]` | Get supported languages |
+| `get_current_language() -> str` | Language code | Get current language |
+
+Supported languages: `eo` (Esperanto), `en` (English), `fr` (French)
+
+### Exceptions (`A.core.exceptions`)
+
+| Exception | Base | Description |
+|-----------|-----|-------------|
+| `AError` | `Exception` | Base exception |
+| `ConfigError` | `AError` | Configuration errors |
+| `PluginError` | `AError` | Plugin loading errors |
+| `DataError` | `AError` | Database errors |
+| `CommandError` | `AError` | Command execution errors |
+
+### Config (`A.core.config`)
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `load_config() -> Config` | Config object | Load from `~/.config/A/config.toml` |
+| `save_config(config: Config) -> None` | — | Save to config.toml |
+| `get_setting(key: str, default: Any = None) -> Any` | Setting value | Get user setting |
+| `set_setting(key: str, value: Any) -> None` | — | Set user setting |
+| `load_profile() -> dict` | Profile dict | Load full profile |
+| `save_profile(data: dict) -> None` | — | Save full profile |
+| `export_profile(path: Path) -> None` | — | Export to JSON file |
+| `import_profile(path: Path) -> None` | — | Import from JSON file |
+
+### Service Layer (`A.core.service`)
+
+| Class/Function | Description |
+|---------------|-------------|
+| `CRUDService` | CRUD with soft-delete, undo |
+| `create_service(name, table)` | Factory function |
+
+### CRUDService Methods
+
+| Method | Description |
+|-------|-------------|
+| `list(order_by, desc, limit)` | List entries |
+| `get(uuid)` | Get by UUID |
+| `get_by_field(field, value)` | Get by field |
+| `search(field, query)` | Search |
+| `create(data)` | Create with auto uuid/timestamp |
+| `update(uuid, data)` | Update with timestamp |
+| `delete(uuid, soft)` | Delete (soft/permanent) |
+| `restore(uuid)` | Restore from trash |
+| `empty_trash(days)` | Cleanup trash |
+| `push_undo(op, data)` | Undo stack |
+| `load_undo_stack()` | Load undo stack |
+
+```python
+# Example
+from A.core.service import CRUDService
+from A.data import SQLiteDB
+
+db = SQLiteDB("vorto.db")
+words = CRUDService(db, "vorto")
+
+words.create({"teksto": "hello"})
+words.list()
+words.delete(uuid, soft=True)
+words.restore(uuid)
+```
+
+### Plugin Contract
+
+Plugins must register via entry points:
+
+```toml
+[project.entry-points."A.commands"]
+myplugin = "A_myplugin.cli:app"
+```
+
+Requirements:
+- Export `app: typer.Typer` from `A_myplugin.cli`
+- Use `A.core.i18n.tr()` for all user-facing strings
+- Use `A.core.exceptions` for errors
+- Use XDG paths from `A.core.paths`
+
+### Example Plugin Structure
+
+```
+A_myplugin/
+├── src/
+│   └── A_myplugin/
+│       ├── __init__.py
+��       ├── cli.py          # exports: app
+│       ├── service.py     # Business logic
+│       └── data.py        # SQLite operations
+├── tests/
+├── pyproject.toml         # Entry point registration
+└── AGENTS.md
+```

@@ -1,8 +1,10 @@
 """Configuration loader for A."""
 
 import tomllib
+import json
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Any
 
 from A.core.paths import config_dir
 from A.core.exceptions import ConfigError
@@ -15,6 +17,7 @@ class Config:
     verbose: bool = False
     plugins: list[str] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)
+    settings: dict[str, Any] = field(default_factory=dict)
 
 
 def load_config() -> Config:
@@ -35,6 +38,7 @@ def load_config() -> Config:
         verbose=data.get("verbose", False),
         plugins=data.get("plugins", []),
         aliases=data.get("aliases", {}),
+        settings=data.get("settings", {}),
     )
 
 
@@ -55,3 +59,50 @@ def save_config(config: Config) -> None:
             lines.append(f'{k} = "{v}"')
     
     config_path.write_text("\n".join(lines) + "\n")
+
+
+# User profile methods
+def get_setting(key: str, default: Any = None) -> Any:
+    """Get a user setting."""
+    config = load_config()
+    return config.settings.get(key, default)
+
+
+def set_setting(key: str, value: Any) -> None:
+    """Set a user setting."""
+    config = load_config()
+    config.settings[key] = value
+    save_config(config)
+
+
+def load_profile() -> dict:
+    """Load full user profile."""
+    config = load_config()
+    return {
+        "language": config.language,
+        "settings": config.settings,
+    }
+
+
+def save_profile(data: dict) -> None:
+    """Save full user profile."""
+    config = load_config()
+    if "language" in data:
+        config.language = data["language"]
+    if "settings" in data:
+        config.settings.update(data["settings"])
+    save_config(config)
+
+
+def export_profile(path: Path) -> None:
+    """Export profile to JSON file."""
+    profile = load_profile()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(profile, f, indent=2, ensure_ascii=False)
+
+
+def import_profile(path: Path) -> None:
+    """Import profile from JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    save_profile(data)

@@ -1,5 +1,9 @@
 # A-core
 
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+
 A - minimuma CLI kadro / A - minimal CLI framework
 
 Esperanto-native CLI framework with plugin support.
@@ -61,6 +65,46 @@ pip install A-sistemo       # System management
 | [A-organizi](https://github.com/Ron-RONZZ-org/A-organizi/) | Calendar, todo, journal |
 | [A-lien](https://github.com/Ron-RONZZ-org/A-lien/) | Email and contacts |
 | [A-medio](https://github.com/Ron-RONZZ-org/A-medio/) | Video, photo, audio |
+
+## Shell Integrations
+
+Some features are better handled as shell aliases rather than plugins:
+
+### kp (clipboard)
+
+Instead of a plugin, use your terminal's clipboard tools directly:
+
+```bash
+# Linux (xclip)
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+alias kp='xclip -selection clipboard'
+
+# Linux (xsel)
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+alias kp='xsel --clipboard --input'
+
+# macOS
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+alias kp='pbcopy'
+
+# Usage
+
+## Context
+
+For architecture and API reference, see [A-workspace](./workspace/).
+A sistemo | kp    # Copy output to clipboard
+```
+
+This avoids a 60-line wrapper for a single shell command.
 
 ## Developing Plugins
 
