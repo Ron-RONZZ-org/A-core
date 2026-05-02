@@ -8,6 +8,8 @@ from A.core.config import load_config, save_config, Config, get_setting, set_set
 from A.core.crypto import encrypt, decrypt, encrypt_str, decrypt_str
 from A.core.export import export_json, export_toml, export_json_stream, export_toml_stream
 from A.core.import_ import import_json, import_toml, import_auto, import_stream
+from A.core.markdown_parser import render_markdown
+from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
 
 __all__ = [
     # Types
@@ -55,4 +57,9 @@ __all__ = [
     "import_toml",
     "import_auto",
     "import_stream",
+    # Markdown
+    "render_markdown",
+    "preview_markdown",
+    "preview_html",
+    "clear_cache",
 ]

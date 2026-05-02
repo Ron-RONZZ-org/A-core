@@ -8,6 +8,8 @@ from A.core.service import CRUDService, create_service
 from A.core.undo import UndoManager, UndoOperation, create_undo_operation
 from A.utils import info, success, warning, error, run
 from A.utils.normalize import fold_search_text, normalize_french_ligatures, NORMALIZERS
+from A.core.markdown_parser import render_markdown
+from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
 from A.data.search import FTSConfig
 
 __all__ = [
@@ -26,6 +28,11 @@ __all__ = [
     "fold_search_text",
     "normalize_french_ligatures",
     "NORMALIZERS",
+    # Markdown rendering
+    "render_markdown",
+    "preview_markdown",
+    "preview_html",
+    "clear_cache",
     # Search
     "FTSConfig",
     # Undo system
