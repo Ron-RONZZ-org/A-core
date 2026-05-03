@@ -71,10 +71,21 @@ src/A/
 - **CLI command names in Esperanto.**
   Examples: `tempo`, `list`, `help`.
 - **Python source code uses English `snake_case`.**
-- **Help text in Esperanto by default.**
-  Fall back to English, then French.
+- **Help text MUST use `tr_multi()` for i18n.**
+  - Use: `help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")`
+  - NEVER use: `help="Max results"` (English only)
+  - Rule: Always provide Esperanto as first argument, English second, French third
 - **User-facing output: calm, minimal.**
   No bold, no highlights, no animations by default.
+
+### i18n Quick Reference
+
+| Situation | Solution |
+|-----------|----------|
+| CLI option help text | `tr_multi("eo", "en", "fr")` |
+| Static UI strings (button labels) | `tr("key")` from dict |
+| Dynamic/runtime strings | `tr_multi(eo, en, fr)` inline |
+| Docstrings (internal) | English (not user-facing) |
 
 ---
 
