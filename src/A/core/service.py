@@ -71,6 +71,34 @@ class CRUDService:
         if fts_config:
             self._ensure_fts()
 
+    def _post_create(self, data: dict[str, Any], result: dict[str, Any]) -> None:
+        """Hook called after successful create. Override in subclass.
+
+        Args:
+            data: The input data passed to create()
+            result: The created entry with generated UUID and timestamps
+        """
+
+    def _post_update(
+        self, uuid: str, old_data: dict[str, Any] | None, new_data: dict[str, Any]
+    ) -> None:
+        """Hook called after successful update. Override in subclass.
+
+        Args:
+            uuid: Entry UUID
+            old_data: The entry state before update (None if entry didn't exist)
+            new_data: The updated data
+        """
+
+    def _post_delete(self, uuid: str, data: dict[str, Any] | None, soft: bool) -> None:
+        """Hook called after successful delete. Override in subclass.
+
+        Args:
+            uuid: Entry UUID
+            data: The entry data before deletion (None if not found)
+            soft: True if moved to trash, False if permanently deleted
+        """
+
     def _ensure_trash_table(self) -> None:
         """Create trash table if not exists (schema from main table + forigita_je)."""
         # Get main table schema
@@ -355,6 +383,12 @@ class CRUDService:
                 new_data=data.copy(),
             ))
 
+        # Post-create hook (call last, ignore exceptions)
+        try:
+            self._post_create(data, data)
+        except Exception:
+            pass  # Hooks should not break main operation
+
         return data
 
     def update(self, uuid: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -386,6 +420,12 @@ class CRUDService:
                 new_data=data,
             ))
 
+        # Post-update hook (call last, ignore exceptions)
+        try:
+            self._post_update(uuid, old_data, data)
+        except Exception:
+            pass  # Hooks should not break main operation
+
         return {**self.get(uuid), **data}
 
     def delete(self, uuid: str, soft: bool = True) -> None:
@@ -416,6 +456,12 @@ class CRUDService:
                 record_uuid=uuid,
                 old_data=old_data,
             ))
+
+        # Post-delete hook (call last, ignore exceptions)
+        try:
+            self._post_delete(uuid, old_data, soft)
+        except Exception:
+            pass  # Hooks should not break main operation
 
     def _move_to_trash(self, uuid: str) -> None:
         """Move entry to trash table."""
