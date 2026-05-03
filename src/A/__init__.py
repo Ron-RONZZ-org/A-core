@@ -6,6 +6,8 @@ from A.core.paths import ensure_dirs
 from A.core.exceptions import AError
 from A.core.service import CRUDService, create_service
 from A.core.undo import UndoManager, UndoOperation, create_undo_operation
+from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links
+from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
 from A.utils import info, success, warning, error, run
 from A.utils.normalize import fold_search_text, normalize_french_ligatures, NORMALIZERS
 from A.core.markdown_parser import render_markdown
@@ -39,4 +41,19 @@ __all__ = [
     "UndoManager",
     "UndoOperation",
     "create_undo_operation",
+    # Links (bidirectional)
+    "Link",
+    "get_links_db",
+    "add_link",
+    "remove_link",
+    "get_outgoing",
+    "get_incoming",
+    "get_links",
+    # References (vt#uuid, ec#uuid)
+    "Ref",
+    "ResolvedRef",
+    "parse_refs",
+    "resolve",
+    "get_ref_display",
+    "clear_ref_cache",
 ]
