@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "schema_version": "1.0",
+  "updated": "2026-05-03T00:00:00Z",
+  "modules": [
+    {
+      "name": "tempo",
+      "display_name": "Tempo",
+      "pip": "A-tempo",
+      "description": "# Tempo\n\nMontri la nunan lokan daton kaj tagnomon.\n\n* Montri tempon laŭ horzonoj\n* Subtenas UTC-limojn (-12 ĝis +14)\n\n## Installation\n\n```bash\npip install A-tempo\n```\n"
+    },
+    {
+      "name": "vorto",
+      "display_name": "Vorto",
+      "pip": "A-vorto",
+      "description": "# Vorto\n\nVortaro kaj leksikono por A.\n\n* Multlingva vortaro kun tradukoj\n* Frazo-kolekto kaj ekzemploj\n* Etikedoj kaj kategorioj\n* Eksporto/importo kun ĉifrado\n\n## Installation\n\n```bash\npip install A-vorto\n```\n"
+    },
+    {
+      "name": "encik",
+      "display_name": "Encik",
+      "pip": "A-encik",
+      "description": "# Encik\n\nSci-mastruma mikroapo por A.\n\n* Scio-bazo kun semantikaj ligiloj\n* Serĉo laŭ titolo, teksto, kaj semantikaj kondiĉoj\n* Vikipedia-stila grafeo de konceptoj\n* Markdown-aperigo kaj HTML-antaŭvido\n\n## Installation\n\n```bash\npip install A-encik\n```\n"
+    },
+    {
+      "name": "sistemo",
+      "display_name": "Sistemo",
+      "pip": "A-sistemo",
+      "description": "# Sistemo\n\nSistema administrado por A.\n\n* Sistemaj informoj kaj diagnozo\n* Administrado de servoj\n* Monitorado de rimedoj\n\n## Installation\n\n```bash\npip install A-sistemo\n```\n"
+    },
+    {
+      "name": "organizi",
+      "display_name": "Organizi",
+      "pip": "A-organizi",
+      "description": "# Organizi\n\nKalendaro, taskoj, kaj taglibro.\n\n* Eventoj kaj kalendaro\n* Far-listoj (TODO)\n* Tagaj notoj (taglibro)\n* ICS-importo/eksporto\n\n## Installation\n\n```bash\npip install A-organizi\n```\n"
+    },
+    {
+      "name": "lien",
+      "display_name": "Lien",
+      "pip": "A-lien",
+      "description": "# Lien\n\nRetpoŝto kaj kontakt-administrado.\n\n* Retpoŝta sendado/ricevado\n* Kontaktadministrado\n* Ŝlosilvorto-administrado\n\n## Installation\n\n```bash\npip install A-lien\n```\n"
+    },
+    {
+      "name": "medio",
+      "display_name": "Medio",
+      "pip": "A-medio",
+      "description": "# Medio\n\nAŭdvida materiala administrado.\n\n* YouTube-elŝutado\n* Audio/bildo/vidbendo-organizado\n* Metadatumoj\n\n## Installation\n\n```bash\npip install A-medio\n```\n"
+    },
+    {
+      "name": "sekurkopio",
+      "display_name": "Sekurkopio",
+      "pip": "A-sekurkopio",
+      "description": "# Sekurkopio\n\nSekurkopio kaj restaŭrado.\n\n* Rezerva kopio de datumoj kun restic\n* Planitaj sekurkopioj\n* Restaŭrado de dosieroj\n\n## Installation\n\n```bash\npip install A-sekurkopio\n```\n"
+    },
+    {
+      "name": "agento",
+      "display_name": "Agento",
+      "pip": "A-agento",
+      "description": "# Agento\n\nAI-agentoj por A.\n\n* LLM-integrado (OpenAI, Ollama, HuggingFace, DeepSeek)\n* Aŭtomataj taskoj kaj genera enhavo\n* Ŝlosilvarto-administrado por API-oj\n\n## Installation\n\n```bash\npip install A-agento\n```\n"
+    }
+  ]
+}

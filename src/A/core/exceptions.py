@@ -30,3 +30,8 @@ class DataError(AError):
 class CommandError(AError):
     """Command execution errors."""
     pass
+
+
+class RegistryError(AError):
+    """Module registry fetch/parse errors."""
+    pass

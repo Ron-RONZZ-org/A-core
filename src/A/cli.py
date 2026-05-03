@@ -4,11 +4,16 @@ import importlib.metadata
 from typing import Callable
 
 import typer
+from rich.table import Table
+from rich.panel import Panel
 
 from A import tr, tr_multi
 from A.core.paths import ensure_dirs
 from A.core.migration import get_status, migrate_all, migrate_keyring_passwords, MigrationStatus
-from A.utils import info, success, error, warning
+from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
+from A.core.markdown_parser import render_markdown
+from A.utils import info, success, error, warning, console
+from A.utils.interactive import select_candidate
 
 
 # ── Lazy Plugin Loading ──────────────────────────────────────────────────────
@@ -105,16 +110,13 @@ def main_callback(
 
 @app.command("list")
 def list_cmd() -> None:
-    """Listigi agorditajn komandojn."""
-    names = sorted(_PLUGIN_ENTRY_POINTS.keys())
-
-    if not names:
-        info("Neniuj kromprogramoj instalitaj. Instalu per: pip install A[tempo]")
-        return
-
-    success(f"Agordeblaj komandoj ({len(names)}):")
-    for name in names:
-        info(f"  {name}")
+    """Listigi instalitajn modulojn (malrekomendita)."""
+    warning(tr_multi(
+        "`A list` estas malrekomendita. Uzu `A modulo ls --instalita` anstataŭe.",
+        "`A list` is deprecated. Use `A modulo ls --instalita` instead.",
+        "`A list` est d\u00e9pr\u00e9ci\u00e9. Utilisez `A modulo ls --instalita`.",
+    ))
+    modulo_ls(instalita=True)
 
 
 # ── Migration helpers ─────────────────────────────────────────────────────────
@@ -276,6 +278,247 @@ def _ensure_keyring() -> bool:
         except Exception as e:
             error(f"Instalo malsukcesis: {e}")
             return False
+
+
+# ── Modulo sub-app ────────────────────────────────────────────────────────────
+
+modulo_app = typer.Typer(
+    name="modulo",
+    help=tr_multi(
+        "Moduloj — administrado de A-moduloj",
+        "Modules — A module management",
+        "Modules — gestion des modules A",
+    ),
+    no_args_is_help=True,
+)
+
+
+def _get_first_line(text: str, max_chars: int = 60) -> str:
+    """Extract the first meaningful line from a markdown description."""
+    line = ""
+    for part in text.split("\n"):
+        stripped = part.strip()
+        if stripped and not stripped.startswith("#"):
+            line = stripped
+            break
+    if len(line) > max_chars:
+        line = line[: max_chars - 1] + "\u2026"
+    return line
+
+
+@modulo_app.command("ls")
+def modulo_ls(
+    instalita: bool = typer.Option(
+        False,
+        "--instalita",
+        help=tr_multi(
+            "Montri nur instalitajn modulojn",
+            "Show only installed modules",
+            "Afficher uniquement les modules install\u00e9s",
+        ),
+    ),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help=tr_multi(
+            "Refre\u015digi la manifeston de la reto",
+            "Refresh the registry from network",
+            "Actualiser le registre depuis le r\u00e9seau",
+        ),
+    ),
+) -> None:
+    """Listigi modulojn el la registra manifest."""
+    if instalita:
+        modules = get_installed_modules()
+        if not modules:
+            info(tr_multi(
+                "Neniuj moduloj instalitaj.",
+                "No modules installed.",
+                "Aucun module install\u00e9.",
+            ))
+            return
+
+        table = Table(show_header=True, header_style="dim", box=None)
+        table.add_column("#", style="dim", width=3)
+        table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
+        table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"), style="dim")
+
+        for i, m in enumerate(modules, 1):
+            table.add_row(str(i), m.get("display_name", m["name"]), m.get("pip", ""))
+        console.print(table)
+        return
+
+    # Full list: available + installed
+    data = fetch_registry(refresh=refresh)
+    if data is None:
+        error(tr_multi(
+            "Ne eblas atingi la modul-registron. Kontrolu vian retkonekton.",
+            "Cannot reach the module registry. Check your internet connection.",
+            "Impossible d'atteindre le registre. V\u00e9rifiez votre connexion.",
+        ))
+        raise typer.Exit(1)
+
+    installed_names = {m["name"] for m in get_installed_modules()}
+    all_modules = sorted(data.get("modules", []), key=lambda m: m.get("name", ""))
+
+    table = Table(show_header=True, header_style="dim", box=None)
+    table.add_column("#", style="dim", width=3)
+    table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
+    table.add_column(
+        tr_multi("Priskribo", "Description", "Description"), style="dim"
+    )
+    table.add_column(
+        tr_multi("Stato", "Status", "\u00c9tat"), style="dim", width=12
+    )
+
+    for i, m in enumerate(all_modules, 1):
+        name = m.get("name", "")
+        display = m.get("display_name", name)
+        desc = _get_first_line(m.get("description", ""))
+        status = ""
+        if name in installed_names:
+            status = tr_multi("\u2713 instalita", "\u2713 installed", "\u2713 install\u00e9")
+        table.add_row(str(i), display, desc, status)
+
+    console.print(table)
+
+
+@modulo_app.command("serci")
+def modulo_serci(
+    keyword: str = typer.Argument(
+        ...,
+        help=tr_multi(
+            "\u015closilvorto por ser\u0109i modulojn",
+            "Keyword to search modules",
+            "Mot-cl\u00e9 pour rechercher des modules",
+        ),
+    ),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help=tr_multi(
+            "Refre\u015digi la manifeston de la reto",
+            "Refresh the registry from network",
+            "Actualiser le registre depuis le r\u00e9seau",
+        ),
+    ),
+) -> None:
+    """Ser\u0109i modulojn la\u016d nomo a\u016d priskribo."""
+    # Force refresh before searching
+    if refresh:
+        fetch_registry(refresh=True)
+
+    results = search_registry(keyword)
+
+    if not results:
+        info(tr_multi(
+            f"Neniuj rezultoj por '{keyword}'.",
+            f"No results for '{keyword}'.",
+            f"Aucun r\u00e9sultat pour '{keyword}'.",
+        ))
+        return
+
+    if len(results) == 1:
+        _show_module_info(results[0])
+        return
+
+    # Multiple results — use interactive selection
+    result = select_candidate(
+        results,
+        columns=[
+            {
+                "header": tr_multi("Nomo", "Name", "Nom"),
+                "style": "bold",
+            },
+            {
+                "header": tr_multi("Priskribo", "Description", "Description"),
+                "style": "dim",
+            },
+        ],
+        row_formatter=lambda m, i: [
+            m.get("display_name", m.get("name", "")),
+            _get_first_line(m.get("description", ""), 50),
+        ],
+    )
+    if result is not None:
+        _show_module_info(result[1])
+
+
+def _show_module_info(module: dict) -> None:
+    """Display a single module's information panel."""
+    name = module.get("display_name", module.get("name", ""))
+    pip = module.get("pip", "")
+    desc = module.get("description", "")
+
+    # Check install status
+    installed_names = {m["name"] for m in get_installed_modules()}
+    is_installed = module.get("name", "") in installed_names
+
+    status_text = (
+        tr_multi("\u2713 instalita", "\u2713 installed", "\u2713 install\u00e9")
+        if is_installed
+        else tr_multi("havebla", "available", "disponible")
+    )
+
+    # Render description as HTML for panel body
+    body = render_markdown(desc)
+
+    panel = Panel(
+        body,
+        title=f"[bold]{name}[/bold]",
+        subtitle=f"[dim]pip install {pip}[/dim]",
+    )
+    console.print(panel)
+    console.print(f"[dim]Stato: {status_text}[/dim]")
+    console.print(panel)
+
+
+@modulo_app.command("info")
+def modulo_info(
+    name: str = typer.Argument(
+        ...,
+        help=tr_multi(
+            "Nomo de la moduloj",
+            "Module name",
+            "Nom du module",
+        ),
+    ),
+    refresh: bool = typer.Option(
+        False,
+        "--refresh",
+        help=tr_multi(
+            "Refre\u015digi la manifeston de la reto",
+            "Refresh the registry from network",
+            "Actualiser le registre depuis le r\u00e9seau",
+        ),
+    ),
+) -> None:
+    """Vidi detalajn informojn pri modulo."""
+    if refresh:
+        fetch_registry(refresh=True)
+
+    module = get_module_info(name)
+    if module is None:
+        error(tr_multi(
+            f"Modulo '{name}' ne trovita en la registraro.",
+            f"Module '{name}' not found in the registry.",
+            f"Module '{name}' introuvable dans le registre.",
+        ))
+        # Show available names
+        data = fetch_registry()
+        if data:
+            names = ", ".join(m.get("name", "") for m in data.get("modules", []))
+            info(tr_multi(
+                f"Disponeblaj moduloj: {names}",
+                f"Available modules: {names}",
+                f"Modules disponibles : {names}",
+            ))
+        raise typer.Exit(1)
+
+    _show_module_info(module)
+
+
+app.add_typer(modulo_app, name="modulo")
 
 
 def main():
