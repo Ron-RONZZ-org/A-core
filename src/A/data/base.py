@@ -40,7 +40,7 @@ class SQLiteDB:
                     (table,)
                 )
                 if cursor.fetchone() is None:
-                    conn.execute(sql)
+                    conn.executescript(sql)
             conn.commit()
     
     @contextmanager

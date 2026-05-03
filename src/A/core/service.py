@@ -470,7 +470,10 @@ class CRUDService:
 
     def _move_to_trash(self, uuid: str) -> None:
         """Move entry to trash table."""
-        entry = self.get(uuid)
+        # Fetch raw data directly (bypass subclass get() which may deserialize JSON)
+        entry = self.db.execute_one(
+            f"SELECT * FROM {self.table} WHERE uuid = ?", (uuid,)
+        )
         if not entry:
             return
 
