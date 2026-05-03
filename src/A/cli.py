@@ -4,18 +4,22 @@ import sys
 import importlib.metadata
 from pathlib import Path
 from functools import lru_cache
+from typing import Callable
 
 import typer
 
 from A import tr
 from A.core.paths import ensure_dirs
-from A.core.migration import get_status, migrate_keyring_passwords
-from A.utils import info, success, error
+from A.core.migration import get_status, migrate_all, migrate_keyring_passwords, MigrationStatus
+from A.utils import info, success, error, warning
 from A.core.exceptions import AError
 
 
 # Cache for discovered plugins
 _DISCOVERED_PLUGINS: dict[str, typer.Typer] = {}
+
+# Cache for discovered migrations
+_DISCOVERED_MIGRATIONS: dict[str, Callable[[], None]] = {}
 
 
 def _discover_plugins() -> dict[str, typer.Typer]:
@@ -45,6 +49,48 @@ def _discover_plugins() -> dict[str, typer.Typer]:
     
     _DISCOVERED_PLUGINS = commands
     return commands
+
+
+def _discover_migrations() -> dict[str, Callable[[], None]]:
+    """Discover migrations from A-modules via entry points (cached).
+    
+    Looks for entry points in the "A.migrations" group.
+    Each entry point should be a callable that registers the migration.
+    """
+    global _DISCOVERED_MIGRATIONS
+    
+    if _DISCOVERED_MIGRATIONS:
+        return _DISCOVERED_MIGRATIONS
+    
+    migrations: dict[str, Callable[[], None]] = {}
+    try:
+        eps = importlib.metadata.entry_points(group="A.migrations")
+    except TypeError:
+        # Python < 3.10
+        eps = importlib.metadata.entry_points().get("A.migrations", [])
+    
+    for ep in eps:
+        try:
+            migrator = ep.load()
+            # Validate it's callable
+            if callable(migrator):
+                migrations[ep.name] = migrator
+            else:
+                warning(f"invalid migration {ep.name}: not callable")
+        except Exception as e:
+            warning(f"failed to load migration {ep.name}: {e}")
+    
+    _DISCOVERED_MIGRATIONS = migrations
+    return migrations
+
+
+def _register_migrations() -> None:
+    """Register all discovered migrations by calling their registration functions."""
+    for module, migrator in _discover_migrations().items():
+        try:
+            migrator()
+        except Exception as e:
+            warning(f"failed to register migration for {module}: {e}")
 
 
 app = typer.Typer(
@@ -78,67 +124,72 @@ def help_cmd() -> None:
 
 
 @app.command("migri")
-def migri_cmd() -> None:
-    """Montri migr-adolon."""
-    # Try to load module migrations
-    results = []
+def migri_cmd(
+    status: bool = typer.Option(
+        False,
+        "--status",
+        "-s",
+        help=tr("Montri staton de cxiuj migradoj"),
+    ),
+    list_cmd: bool = typer.Option(
+        False,
+        "--list",
+        "-l",
+        help=tr("Listigi cxiujn disponeblajn migradojn"),
+    ),
+) -> None:
+    """Montri migr-adolon aŭ migradan staton."""
+    # Register all discovered migrations first
+    _register_migrations()
     
-    # A-lien migration
-    try:
-        from A_lien.data.migrate_from_autish import migrate as migrate_lien
-        result = migrate_lien()
-        results.append(("A-lien", result))
-    except ImportError:
-        pass
-    except Exception as e:
-        error(f"A-lien: {e}")
+    # Handle --status or --list
+    if status or list_cmd:
+        show_migration_status()
+        return
     
-    # A-vorto migration
-    try:
-        from A_vorto.data.migrate_from_autish import migrate as migrate_vorto
-        result = migrate_vorto()
-        results.append(("A-vorto", result))
-    except ImportError:
-        pass
-    except Exception as e:
-        error(f"A-vorto: {e}")
-    
-    # A-encik migration
-    try:
-        from A_encik.data.migrate_from_autish import migrate as migrate_encik
-        result = migrate_encik()
-        results.append(("A-encik", result))
-    except ImportError:
-        pass
-    except Exception as e:
-        error(f"A-encik: {e}")
-    
-    # A-organizi migration
-    try:
-        from A_organizi.data.migrate_from_autish import migrate as migrate_organizi
-        result = migrate_organizi()
-        results.append(("A-organizi", result))
-    except ImportError:
-        pass
-    except Exception as e:
-        error(f"A-organizi: {e}")
+    # Run all pending migrations (using A.core.migration)
+    results = migrate_all()
     
     if not results:
         info("Neniuj migrationoj haveblas.")
         return
     
     success("Rezultoj de migr-adolo:")
-    for module, result in results:
-        if isinstance(result, dict) and result.get("skipped"):
-            info(f"  {module}: saltita ({result.get('reason', 'nekonata')})")
-        elif isinstance(result, dict):
-            migrated = result.get("migrated_rows", 0)
-            source = result.get("source_rows", 0)
-            errors = result.get("errors", [])
-            if errors:
-                error(f"  {module}: {migrated}/{source} eraroj: {len(errors)}")
+    for module, result in results.items():
+        if result.skipped:
+            info(f"  {module}: saltita ({result.skipped_reason})")
+        elif result.errors:
+            error(f"  {module}: {result.migrated_rows}/{result.source_rows} eraroj: {len(result.errors)}")
+        else:
+            success(f"  {module}: {result.migrated_rows}/{result.source_rows} migrantitaj")
+
+
+def show_migration_status() -> None:
+    """Show migration status for all modules."""
+    discovered = _discover_migrations()
+    
+    if not discovered:
+        info("Neniuj migr-moduloj trovite.")
+        info("Instalu A-modulojn kun migr-ad funkcioj.")
+        return
+    
+    success(f"Migrada stato ({len(discovered)} moduloj):")
+    
+    # Get status from migration framework
+    status_map = get_status()
+    
+    for module in sorted(discovered.keys()):
+        if module in status_map:
+            st: MigrationStatus = status_map[module]
+            if st.migrated:
+                info(f"  {module}: migrantita ({st.migrated_rows} vicoj)")
+            elif st.available:
+                info(f"  {module}: havebla ({st.source_rows} vicoj por migrantadi)")
             else:
-                success(f"  {module}: {migrated}/{source} migrated")
+                info(f"  {module}: nehavebla")
+        else:
+            # Registered but no status yet
+            info(f"  {module}: neiniciatita")
 
 
 @app.command("migri-keyring")

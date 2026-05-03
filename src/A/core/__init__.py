@@ -12,6 +12,7 @@ from A.core.import_ import import_json, import_toml, import_auto, import_stream
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
 from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider, LLMProvider
+from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 
 __all__ = [
     # Types
@@ -75,4 +76,10 @@ __all__ = [
     "set_default_provider",
     "get_default_provider",
     "LLMProvider",
+    # Migration
+    "get_status",
+    "migrate_all",
+    "register_migration",
+    "MigrationResult",
+    "MigrationStatus",
 ]
