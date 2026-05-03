@@ -32,6 +32,7 @@ Esperanto-native CLI framework with plugin support.
 - Import/export with AES-256 encryption (optional)
 - Minimal, calm output
 - Shared utilities (i18n, output, subprocess)
+- **Migration from autish** (SQLite + keyring)
 
 ## Install
 
@@ -196,6 +197,45 @@ export_json_stream(record_generator(), Path("large.json"))
 **Install with encryption:**
 ```bash
 pip install A-core  # Includes cryptography
+```
+
+## Migration from autish
+
+A-core provides migration from autish (legacy) to A-* modules:
+
+```bash
+A migri           # Run all pending migrations
+A migri-keyring   # Migrate passwords from legacy keyring
+```
+
+**What gets migrated:**
+
+| Legacy DB | Target Module | Data |
+|----------|------------|------|
+| retposto.db | A-lien | contacts |
+| vorto.db | A-vorto | words |
+| encik.db | A-encik | knowledge entries |
+| kalendaro.db | A-organizi | calendar events |
+| tasklibro.db | A-organizi | tasks + journal |
+
+**Features:**
+- Idempotent — safe to run multiple times
+- State tracking in `~/.local/share/A/migration_state.json`
+- JSON field conversions (legacy flat → A-* JSON arrays)
+- Keyring migration: `autish-retposto-{uuid}` → `A-lien/{uuid}`
+
+**Programmatic usage:**
+
+```python
+from A.core.migration import get_status, migrate_all
+
+# Check status
+status = get_status()
+for module, st in status.items():
+    print(f"{module}: {st.source_rows} → {st.migrated_rows}")
+
+# Run migrations
+results = migrate_all()
 ```
 
 ## Usage

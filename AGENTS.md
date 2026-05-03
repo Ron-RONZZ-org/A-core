@@ -649,6 +649,43 @@ display = get_ref_display("vt", "12345678", show_uuid=True)
 # Returns: "word (vt#1234567)"
 ```
 
+### Migration (`A.core.migration`)
+
+Migration from autish (legacy) to A-* modules. Tracks state for idempotent runs.
+
+| Class/Function | Returns | Description |
+|----------------|---------|-------------|
+| `MigrationResult` | dataclass | Result from a single migration |
+| `MigrationStatus` | dataclass | Overall migration status for a module |
+| `get_status() -> dict` | dict | Get status for all modules |
+| `migrate_all(dry_run=False) -> dict` | dict | Run all pending migrations |
+| `register_migration(...)` | — | Register a module migration |
+| `migrate_keyring_passwords(...) -> int` | int | Migrate keyring passwords |
+
+**CLI commands:**
+```bash
+A migri           # Run all pending migrations
+A migri-keyring   # Migrate keyring passwords
+```
+
+**Programmatic usage:**
+```python
+from A.core.migration import get_status, migrate_all, MigrationResult
+
+# Check status
+status = get_status()
+for module, st in status.items():
+    if st.available and not st.migrated:
+        print(f"{module}: {st.source_rows} rows to migrate")
+
+# Run migrations
+results = migrate_all()
+for module, result in results.items():
+    print(f"{module}: {result.migrated_rows}/{result.source_rows} migrated")
+```
+
+**Migration state:** Stored in `~/.local/share/A/migration_state.json`
+
 ### Plugin Contract
 
 Plugins must register via entry points:
