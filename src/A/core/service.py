@@ -205,6 +205,11 @@ class CRUDService:
             f"SELECT * FROM {self.table} WHERE uuid = ?", (uuid,)
         )
 
+    # Alias for get() - used by A.core.references
+    def get_by_id(self, uuid: str) -> dict[str, Any] | None:
+        """Get a single entry by UUID (alias for get())."""
+        return self.get(uuid)
+
     def get_by_field(self, field: str, value: Any) -> dict[str, Any] | None:
         """Get a single entry by any field."""
         return self.db.execute_one(
