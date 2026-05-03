@@ -264,7 +264,7 @@ def migrate_keyring_passwords(
     try:
         import keyring
     except ImportError:
-        return 0
+        return -1  # Signal: keyring not available
 
     migrated = 0
     try:

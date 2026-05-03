@@ -5,7 +5,7 @@ from typing import Callable
 
 import typer
 
-from A import tr
+from A import tr, tr_multi
 from A.core.paths import ensure_dirs
 from A.core.migration import get_status, migrate_all, migrate_keyring_passwords, MigrationStatus
 from A.utils import info, success, error, warning
@@ -230,7 +230,13 @@ def show_migration_status() -> None:
 def migri_keyring_cmd() -> None:
     """Migradu pasvortojn de autish al A."""
     migrated = migrate_keyring_passwords()
-    if migrated > 0:
+    if migrated == -1:
+        warning(tr_multi(
+            "Bezonas 'keyring' bibliotekon. Instalu: pip install A-core[keyring]",
+            "Requires 'keyring' library. Install: pip install A-core[keyring]",
+            "Nécessite la bibliothèque 'keyring'. Installez : pip install A-core[keyring]",
+        ))
+    elif migrated > 0:
         success(f"{migrated} pasvortoj migrantitaj")
     else:
         info("Neniuj pasvortoj por migradi")
