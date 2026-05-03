@@ -1,0 +1,51 @@
+# Pre-commit hooks for A-* modules
+# Install with: pre-commit install --config .pre-commit-hooks.yaml
+
+repos:
+  - repo: local
+    hooks:
+      - id: no-english-help
+        name: Check for English-only help text
+        description: Ensure CLI help text uses tr_multi() for i18n
+        entry: python -c "
+import re
+import sys
+from pathlib import Path
+
+# Patterns that indicate English-only help text (not wrapped in tr_multi)
+BAD_PATTERNS = [
+    r'help=\"[A-Z][^\"]*\"',  # help=\"Something with capital letter
+]
+
+# Exclude patterns
+EXCLUDE_DIRS = ['__pycache__', '.venv', 'venv', 'build', 'dist']
+
+files = sys.argv[1:] or ['.']
+
+errors = []
+for path in files:
+    p = Path(path)
+    if p.is_file() and p.suffix == '.py':
+        content = p.read_text()
+        for match in re.finditer(r'help="([^"]+)"', content):
+            help_text = match.group(1)
+            # Skip if already wrapped in tr() or tr_multi()
+            if 'tr(' in help_text or 'tr_multi' in help_text:
+                continue
+            # Skip if looks like UUID, paths, or special characters
+            if help_text.startswith('-') or '/' in help_text or '#' in help_text:
+                continue
+            # Skip if no capital letter (likely already in Esperanto)
+            if not any(c.isupper() for c in help_text):
+                continue
+            errors.append(f'{p}:{match.start()}: help=\"{help_text}\"')
+
+if errors:
+    print('ERROR: English-only help text found. Use tr_multi() instead.')
+    for e in errors:
+        print(f'  {e}')
+    sys.exit(1)
+"
+        language: system
+        types: [python]
+        pass_filenames: true
