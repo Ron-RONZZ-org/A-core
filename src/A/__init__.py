@@ -9,7 +9,9 @@ from A.core.undo import UndoManager, UndoOperation, create_undo_operation
 from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links
 from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
 from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider, LLMProvider
+from A.core.registry import fetch_registry, search_registry, get_module_info, get_installed_modules
 from A.utils import info, success, warning, error, run, copy_to_clipboard, copy_file
+from A.utils.interactive import select_candidate, confirm_action
 from A.utils.normalize import fold_search_text, normalize_french_ligatures, NORMALIZERS
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
@@ -44,6 +46,14 @@ __all__ = [
     "UndoManager",
     "UndoOperation",
     "create_undo_operation",
+    # Module registry
+    "fetch_registry",
+    "search_registry",
+    "get_module_info",
+    "get_installed_modules",
+    # Interactive selection
+    "select_candidate",
+    "confirm_action",
     # Links (bidirectional)
     "Link",
     "get_links_db",
