@@ -98,6 +98,15 @@ src/A/
 5. **WAL mode** for SQLite
 6. **Test coverage required** for all modules
 
+## Optional Dependency Policy
+
+When a command requires an optional dependency that is not installed:
+
+1. **Ask user**: "The 'X' library is required. Install it now?"
+2. **Default to yes**: `typer.confirm(..., default=True)`
+3. **Install on confirmation**: `subprocess.check_call([sys.executable, "-m", "pip", "install", "X"])`
+4. **Exit gracefully** if user declines
+
 ---
 
 ## Documentation Standards (IMPORTANT)

@@ -229,17 +229,53 @@ def show_migration_status() -> None:
 @app.command("migri-keyring")
 def migri_keyring_cmd() -> None:
     """Migradu pasvortojn de autish al A."""
+    imported = _ensure_keyring()
+    if not imported:
+        raise typer.Exit(1)
+    
     migrated = migrate_keyring_passwords()
-    if migrated == -1:
-        warning(tr_multi(
-            "Bezonas 'keyring' bibliotekon. Instalu: pip install A-core[keyring]",
-            "Requires 'keyring' library. Install: pip install A-core[keyring]",
-            "Nécessite la bibliothèque 'keyring'. Installez : pip install A-core[keyring]",
-        ))
-    elif migrated > 0:
+    if migrated > 0:
         success(f"{migrated} pasvortoj migrantitaj")
     else:
         info("Neniuj pasvortoj por migradi")
+
+
+def _ensure_keyring() -> bool:
+    """Ensure the keyring library is available, offering to install if not.
+    
+    Returns:
+        True if keyring is available, False if user declined.
+    """
+    import importlib
+    try:
+        importlib.import_module("keyring")
+        return True
+    except ImportError:
+        import typer
+        from A import tr_multi
+        
+        answer = typer.confirm(
+            tr_multi(
+                "Bezonas 'keyring' bibliotekon. Ĉu instali ĝin nun?",
+                "The 'keyring' library is required. Install it now?",
+                "La bibliothèque 'keyring' est nécessaire. Installer maintenant ?",
+            ),
+            default=True,
+        )
+        if not answer:
+            return False
+        
+        try:
+            import subprocess, sys
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "keyring"]
+            )
+            # Re-import after install
+            importlib.import_module("keyring")
+            return True
+        except Exception as e:
+            error(f"Instalo malsukcesis: {e}")
+            return False
 
 
 def main():
