@@ -97,7 +97,18 @@ app = typer.Typer(
     name="A",
     help=tr("A - minimuma CLI kadro"),
     no_args_is_help=True,
+    pretty_exceptions_short=True,
 )
+
+
+@app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    h: bool = typer.Option(None, "-h", "--help", help="Montri helpon", is_eager=True),
+) -> None:
+    """A - minimuma CLI kadro."""
+    if h is not None:
+        typer.echo(ctx.get_help())
 
 
 @app.command("list")
@@ -112,15 +123,6 @@ def list_commands() -> None:
     success(f"Agordeblaj komandoj ({len(plugins)}):")
     for name in sorted(plugins.keys()):
         info(f"  {name}")
-
-
-@app.command("help")
-def help_cmd() -> None:
-    """Montri ĉi tiun helpon."""
-    # Ensure plugins are registered first
-    for name, cmd_app in _discover_plugins().items():
-        app.add_typer(cmd_app, name=name)
-    typer.echo(app.get_help())
 
 
 @app.command("migri")
