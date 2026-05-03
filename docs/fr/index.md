@@ -179,6 +179,31 @@ from A.utils import success, error, info, run, edit_text
 
 ---
 
+## Migration depuis autish
+
+A prend en charge la migration depuis autish (hérité) vers les modules A-*:
+
+```bash
+A migri           # Exécuter toutes les migrations en attente
+A migri-keyring   # Migrer les mots de passe depuis le keyring hérité
+```
+
+| DB hérité | Module cible | Données |
+|----------|------------|---------|
+| retposto.db | A-lien | contacts |
+| vorto.db | A-vorto | mots |
+| encik.db | A-encik | entrées de connaissance |
+| kalendaro.db | A-organizi | événements calendrier |
+| tasklibro.db | A-organizi | tâches + journal |
+
+**Fonctionnalités:**
+- Idempotent — sûr pour plusieurs exécutions
+- État dans `~/.local/share/A/migration_state.json`
+- Conversions des champs JSON
+- Keyring: `autish-retposto-{uuid}` → `A-lien/{uuid}`
+
+---
+
 ## Contribution
 
 Voir CONTRIBUTING.md à la racine du dépôt.

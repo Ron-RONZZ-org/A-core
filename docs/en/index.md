@@ -181,7 +181,28 @@ from A.utils import success, error, info, run, edit_text
 
 ## Migration from Autish
 
-A is a rewrite of [autish](https://github.com/Ron-RONZZ-org/autish/). Key differences:
+A supports migration from autish (legacy) to A-* modules:
+
+```bash
+A migri           # Run all pending migrations
+A migri-keyring   # Migrate passwords from legacy keyring
+```
+
+**What gets migrated:**
+
+| Legacy DB | Target Module | Data |
+|----------|------------|------|
+| retposto.db | A-lien | contacts |
+| vorto.db | A-vorto | words |
+| encik.db | A-encik | knowledge entries |
+| kalendaro.db | A-organizi | calendar events |
+| tasklibro.db | A-organizi | tasks + journal |
+
+**Features:**
+- Idempotent — safe to run multiple times
+- State tracking in `~/.local/share/A/migration_state.json`
+- JSON field conversions (legacy flat → A-* JSON arrays)
+- Keyring migration: `autish-retposto-{uuid}` → `A-lien/{uuid}`
 
 | Aspect | autish | A |
 |--------|--------|-----|
@@ -191,7 +212,7 @@ A is a rewrite of [autish](https://github.com/Ron-RONZZ-org/autish/). Key differ
 | TUI | Custom | Integrated tools |
 | Config | No formal loader | TOML |
 
-Porting guide coming soon.
+A is a rewrite of [autish](https://github.com/Ron-RONZZ-org/autish/). See above for migration support.
 
 ---
 

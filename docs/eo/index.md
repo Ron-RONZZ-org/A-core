@@ -179,6 +179,31 @@ from A.utils import success, error, info, run, edit_text
 
 ---
 
+## Migrado de autish
+
+A subtenas migrantadon de autish (hereda) al A-* moduloj:
+
+```bash
+A migri           # Ruli ĉiujn pendantajn migrantadojn
+A migri-keyring   # Migradi pasvortojn de hereda keyring
+```
+
+| Legacy DB |Target Modulo | Datumoj |
+|----------|------------|---------|
+| retposto.db | A-lien | kontaktoj |
+| vorto.db | A-vorto | vortoj |
+| encik.db | A-encik | scioj |
+| kalendaro.db | A-organizi | kalendaraj eventoj |
+| tasklibro.db | A-organizi | taskoj + taglibro |
+
+**Trajtoj:**
+- Idempotent — sekura por plurfoje ruli
+- Stato en `~/.local/share/A/migration_state.json`
+- JSON kampaj konvertadoj
+- Keyring: `autish-retposto-{uuid}` → `A-lien/{uuid}`
+
+---
+
 ## Kontribuado
 
 Vidu CONTRIBUTING.md en la deponejo radiko.
