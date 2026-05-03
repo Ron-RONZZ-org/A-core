@@ -8,7 +8,8 @@ from A.core.service import CRUDService, create_service
 from A.core.undo import UndoManager, UndoOperation, create_undo_operation
 from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links
 from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
-from A.utils import info, success, warning, error, run
+from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider, LLMProvider
+from A.utils import info, success, warning, error, run, copy_to_clipboard, copy_file
 from A.utils.normalize import fold_search_text, normalize_french_ligatures, NORMALIZERS
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
@@ -26,6 +27,8 @@ __all__ = [
     "warning",
     "error",
     "run",
+    "copy_to_clipboard",
+    "copy_file",
     # Text normalization
     "fold_search_text",
     "normalize_french_ligatures",
@@ -56,4 +59,11 @@ __all__ = [
     "resolve",
     "get_ref_display",
     "clear_ref_cache",
+    # AI / LLM providers
+    "get_provider",
+    "save_api_key",
+    "get_api_key",
+    "set_default_provider",
+    "get_default_provider",
+    "LLMProvider",
 ]
