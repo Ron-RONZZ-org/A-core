@@ -184,8 +184,10 @@ from A.utils import success, error, info, run, edit_text
 A supports migration from autish (legacy) to A-* modules:
 
 ```bash
-A migri           # Run all pending migrations
-A migri-keyring   # Migrate passwords from legacy keyring
+A migri              # Run all pending migrations
+A migri --status     # Show migration status for all modules
+A migri --list       # List available migrations (alias for --status)
+A migri-keyring      # Migrate passwords from legacy keyring
 ```
 
 **What gets migrated:**

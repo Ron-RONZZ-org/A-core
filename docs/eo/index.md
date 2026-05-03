@@ -184,8 +184,10 @@ from A.utils import success, error, info, run, edit_text
 A subtenas migrantadon de autish (hereda) al A-* moduloj:
 
 ```bash
-A migri           # Ruli ĉiujn pendantajn migrantadojn
-A migri-keyring   # Migradi pasvortojn de hereda keyring
+A migri              # Ruli ĉiujn pendantajn migrantadojn
+A migri --status     # Montri staton de ĉiuj migradoj
+A migri --list       # Listigi disponeblajn migradojn
+A migri-keyring      # Migradi pasvortojn de hereda keyring
 ```
 
 | Legacy DB |Target Modulo | Datumoj |

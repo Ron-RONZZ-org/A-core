@@ -664,8 +664,10 @@ Migration from autish (legacy) to A-* modules. Tracks state for idempotent runs.
 
 **CLI commands:**
 ```bash
-A migri           # Run all pending migrations
-A migri-keyring   # Migrate keyring passwords
+A migri              # Run all pending migrations
+A migri --status     # Show migration status for all modules
+A migri --list       # List available migrations (alias for --status)
+A migri-keyring      # Migrate keyring passwords
 ```
 
 **Programmatic usage:**
