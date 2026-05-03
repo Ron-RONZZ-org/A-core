@@ -11,6 +11,7 @@ from A.core.export import export_json, export_toml, export_json_stream, export_t
 from A.core.import_ import import_json, import_toml, import_auto, import_stream
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
+from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider, LLMProvider
 
 __all__ = [
     # Types
@@ -67,4 +68,11 @@ __all__ = [
     "preview_markdown",
     "preview_html",
     "clear_cache",
+    # AI / LLM providers
+    "get_provider",
+    "save_api_key",
+    "get_api_key",
+    "set_default_provider",
+    "get_default_provider",
+    "LLMProvider",
 ]
