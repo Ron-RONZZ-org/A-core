@@ -47,19 +47,26 @@ Context resolution order (highest priority first):
 
 ```
 src/A/
-├── cli.py           # Main entry, plugin discovery
+├── cli.py           # Main entry, plugin discovery, modulo sub-app
 ├── core/           # Zero dependencies
 │   ├── types.py
 │   ├── paths.py
 │   ├── i18n.py
 │   ├── config.py
-│   └── exceptions.py
+│   ├── exceptions.py
+│   └── registry.py  # Module manifest fetch, cache, search
 ├── data/           # Depends on core
 │   └── base.py
-└── utils/         # Depends on nothing
-    ├── output.py
-    ├── subprocess.py
-    └── editor.py
+├── utils/         # Depends on nothing
+│   ├── output.py
+│   ├── subprocess.py
+│   ├── editor.py
+│   └── interactive.py  # Generic selection utility
+├── modules.json    # Module registry manifest (hosted on GitHub)
+└── tests/
+    ├── test_registry.py
+    ├── test_interactive.py
+    └── test_cli.py
 ```
 
 **Dependency rule:** CLI → Service → Data → Core. No reverse dependencies.
@@ -295,6 +302,7 @@ app = typer.Typer(
 | `PluginError` | `AError` | Plugin loading errors |
 | `DataError` | `AError` | Database errors |
 | `CommandError` | `AError` | Command execution errors |
+| `RegistryError` | `AError` | Module registry fetch/parse errors |
 
 ### Config (`A.core.config`)
 
@@ -707,6 +715,83 @@ for module, result in results.items():
 ```
 
 **Migration state:** Stored in `~/.local/share/A/migration_state.json`
+
+### Module Registry (`A.core.registry`)
+
+Discovers available A-modules via a curated manifest (`modules.json`) hosted on GitHub.
+Fetches and caches the manifest for offline use.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `fetch_registry(*, refresh=False) -> dict \| None` | Manifest dict | Fetch manifest (cache-first), returns None if unreachable |
+| `search_registry(query: str) -> list[dict]` | Matching modules | Case-insensitive search by name/description |
+| `get_module_info(name: str) -> dict \| None` | Module entry | Get single module by name (case-insensitive) |
+| `get_installed_modules() -> list[dict]` | Installed modules | Discover via `A.commands` entry points |
+
+**Config options:**
+- `module_registry_url` (config key) — custom registry URL
+- `A_MODULE_REGISTRY_URL` (env var) — overrides config
+- `module_cache_ttl` (config key, default 86400s) — cache TTL
+
+**Example:**
+```python
+from A import fetch_registry, search_registry
+
+# Fetch all modules
+data = fetch_registry()
+for m in data["modules"]:
+    print(m["name"], m["display_name"])
+
+# Search
+results = search_registry("kalendaro")
+for m in results:
+    print(m["name"], m["description"][:60])
+```
+
+### Interactive Selection (`A.utils.interactive`)
+
+Generic "show numbered table → prompt for selection" pattern extracted from A-encik.
+Reusable across all A-modules.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `select_candidate(candidates, *, columns, row_formatter, ...) -> tuple[int, T] \| None` | Selected item | Display numbered table, prompt user to select |
+| `confirm_action(message, *, default=False) -> bool` | Confirmation | Yes/no prompt |
+
+**`select_candidate` parameters:**
+- `candidates: list[T]` — items to display
+- `columns: list[dict]` — Rich Table column defs (`header`, `style`, `width`)
+- `row_formatter: Callable[[T, int], list[str]]` — `(item, 1-based-index) → cell values`
+- `prompt_text: str` — custom prompt (default: translated message)
+- `default: str` — default input (default: `""` = skip)
+
+**Example:**
+```python
+from A.utils.interactive import select_candidate
+
+result = select_candidate(
+    modules,
+    columns=[
+        {"header": "Nomo", "style": "bold"},
+        {"header": "Priskribo", "style": "dim"},
+    ],
+    row_formatter=lambda m, i: [m["name"], m["description"][:50]],
+)
+if result is not None:
+    idx, module = result
+    print(f"Selected: {module['name']}")
+```
+
+### CLI Modulo Commands
+
+```bash
+A modulo ls                # List all available modules (installed marked)
+A modulo ls --instalita   # List only installed modules
+A modulo serci <keyword>  # Search modules by name/description
+A modulo info <name>      # Show module details with install instructions
+```
+
+The old `A list` is deprecated and delegates to `A modulo ls --instalita`.
 
 ### Plugin Contract
 
