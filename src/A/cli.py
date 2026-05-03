@@ -8,7 +8,7 @@ from typing import Callable
 
 import typer
 
-from A import tr
+from A import tr, tr_multi
 from A.core.paths import ensure_dirs
 from A.core.migration import get_status, migrate_all, migrate_keyring_passwords, MigrationStatus
 from A.utils import info, success, error, warning
@@ -101,7 +101,18 @@ app = typer.Typer(
 
 
 @app.command("list")
-def list_commands() -> None:
+def list_commands(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help=tr_multi(
+            "Montri cxiujn subkomandojn por ciu kromprogramo",
+            "Show all subcommands for each plugin",
+            "Montre toutes les sous-commandes pour chaque plugin"
+        ),
+    ),
+) -> None:
     """Listigi agorditajn komandojn."""
     plugins = _discover_plugins()
     
@@ -111,7 +122,32 @@ def list_commands() -> None:
     
     success(f"Agordeblaj komandoj ({len(plugins)}):")
     for name in sorted(plugins.keys()):
+        plugin_app = plugins[name]
+        
+        # Get help text from plugin's callback docstring
+        help_text = ""
+        if plugin_app.callback and plugin_app.callback.__doc__:
+            first_line = plugin_app.callback.__doc__.strip().split('\n')[0]
+            if first_line:
+                help_text = first_line
+        
+        # Show plugin name and description
         info(f"  {name}")
+        if help_text:
+            info(f"    {help_text}")
+        
+        # Show subcommands if verbose
+        if verbose:
+            commands = list(plugin_app.registered_commands)
+            if commands:
+                info(f"      Komandoj:")
+                for cmd in sorted(commands, key=lambda c: c.name):
+                    cmd_help = cmd.help or ""
+                    first_line = cmd_help.split('\n')[0] if cmd_help else ""
+                    if first_line:
+                        info(f"        {name} {cmd.name} - {first_line}")
+                    else:
+                        info(f"        {name} {cmd.name}")
 
 
 @app.command("help")
