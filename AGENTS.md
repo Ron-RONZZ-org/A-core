@@ -578,6 +578,77 @@ path = preview_html("<h1>Custom</h1>", open_browser=True)
 - Opens in default browser via `webbrowser.open()`
 - Cache in `~/.cache/A/markdown/`
 
+### Links (`A.core.links`)
+
+Bidirectional links for cross-module references. Stores links as adjacency list with O(1) lookups.
+
+| Class/Function | Returns | Description |
+|---------------|---------|-------------|
+| `Link` | dataclass | Represents a directed link |
+| `LinksDB` | class | Database for managing links |
+| `get_links_db() -> LinksDB` | LinksDB | Get singleton instance |
+| `add_link(source_type, source_id, target_type, target_id) -> Link` | Link | Add bidirectional link |
+| `remove_link(...) -> bool` | bool | Remove a link |
+| `get_outgoing(source_type, source_id) -> list[Link]` | list | Get outgoing links |
+| `get_incoming(target_type, target_id) -> list[Link]` | list | Get incoming links (backlinks) |
+| `get_links(entry_type, entry_id) -> dict` | dict | Get both outgoing and incoming |
+| `link_exists(...) -> bool` | bool | Check if link exists |
+| `remove_all_for_entry(...) -> int` | int | Remove all links for an entry |
+| `get_linked_entries(...) -> dict` | dict | Get all linked entry IDs grouped by type |
+
+**Schema:** Links stored in dedicated table with indexes on source and target.
+
+```python
+from A.core.links import add_link, get_outgoing, get_incoming
+
+# Add link from vorto entry to encik entry
+add_link("vorto", "uuid-123", "encik", "uuid-456")
+
+# Get outgoing links from vorto entry
+outgoing = get_outgoing("vorto", "uuid-123")
+
+# Get incoming links (backlinks) to encik entry
+incoming = get_incoming("encik", "uuid-456")
+```
+
+### References (`A.core.references`)
+
+Parse and resolve vt#uuid and ec#uuid references in text. Supports markdown links and plain references.
+
+| Class/Function | Returns | Description |
+|---------------|---------|-------------|
+| `Ref` | dataclass | Parsed reference |
+| `ResolvedRef` | dataclass | Reference with resolved entry data |
+| `parse_refs(text: str) -> list[Ref]` | list | Extract all references from text |
+| `resolve(ref_type, uuid) -> ResolvedRef` | ResolvedRef | Resolve reference to entry data |
+| `get_ref_display(ref_type, uuid, show_uuid) -> str` | str | Human-readable display string |
+| `clear_ref_cache() -> None` | — | Clear resolution cache |
+| `is_valid_ref(ref: str) -> bool` | bool | Check if string is valid reference |
+| `normalize_ref(ref: str) -> str` | str | Normalize to canonical form |
+
+**Reference formats:**
+- Markdown: `[label](vt#uuid)` or `[label](ec#uuid)`
+- Plain: `vt#uuid` or `ec#uuid`
+
+**Runtime detection:** Resolves references using A-vorto or A-encik if available. Gracefully degrades if modules not installed.
+
+```python
+from A.core.references import parse_refs, resolve, get_ref_display
+
+# Parse references from text
+text = "See [this word](vt#12345678) and ec#abcdef01"
+refs = parse_refs(text)
+# Returns: [Ref(ref_type='vt', uuid='12345678', label='this word', is_markdown=True), ...]
+
+# Resolve to entry data
+resolved = resolve("vt", "12345678")
+# Returns: ResolvedRef with exists=True if found
+
+# Get display string
+display = get_ref_display("vt", "12345678", show_uuid=True)
+# Returns: "word (vt#1234567)"
+```
+
 ### Plugin Contract
 
 Plugins must register via entry points:
