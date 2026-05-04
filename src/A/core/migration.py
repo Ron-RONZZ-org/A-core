@@ -48,6 +48,7 @@ class MigrationResult:
     errors: list[str] = field(default_factory=list)
     skipped: bool = False
     skipped_reason: str = ""
+    detail: str = ""  # Extra details like "keyring=2, contacts=148"
 
     @property
     def success(self) -> bool:
@@ -204,6 +205,7 @@ def _save_migration_state(module: str, result: MigrationResult) -> None:
         "last_migration": datetime.now(timezone.utc).isoformat(),
         "source_rows": result.source_rows,
         "migrated_rows": result.migrated_rows,
+        "detail": result.detail,
         "errors": result.errors,
     }
     with open(_get_state_path(), "w") as f:

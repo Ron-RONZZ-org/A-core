@@ -197,9 +197,11 @@ def migri_cmd(
         if result.skipped:
             info(f"  {module}: saltita ({result.skipped_reason})")
         elif result.errors:
-            error(f"  {module}: {result.migrated_rows}/{result.source_rows} eraroj: {len(result.errors)}")
+            detail_msg = f" {result.detail}" if result.detail else ""
+            error(f"  {module}: {result.migrated_rows}/{result.source_rows}{detail_msg} eraroj: {len(result.errors)}")
         else:
-            success(f"  {module}: {result.migrated_rows}/{result.source_rows} migrantitaj")
+            detail_msg = f" {result.detail}" if result.detail else ""
+            success(f"  {module}: {result.migrated_rows}/{result.source_rows}{detail_msg} ✓")
 
 
 def show_migration_status() -> None:
