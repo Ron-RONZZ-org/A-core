@@ -75,8 +75,7 @@ src/A/
 
 ## Language and Naming Conventions
 
-- **CLI command names in Esperanto.**
-  Examples: `tempo`, `list`, `help`.
+- **CLI command names in Esperanto.** See [CLI Command Standard](#cli-command-standard) below.
 - **Python source code uses English `snake_case`.**
 - **Help text MUST use `tr_multi()` for i18n.**
   - Use: `help=tr_multi("Maksimumaj rezultoj", "Max results", "Résultats max")`
@@ -93,6 +92,59 @@ src/A/
 | Static UI strings (button labels) | `tr("key")` from dict |
 | Dynamic/runtime strings | `tr_multi(eo, en, fr)` inline |
 | Docstrings (internal) | English (not user-facing) |
+
+### CLI Command Standard
+
+All A-modules **must** follow this standard for CLI commands. Consistent naming reduces user confusion and enables cross-module tooling.
+
+#### Standard Commands
+
+| Command | Purpose | Required? | Notes |
+|---------|---------|-----------|-------|
+| `-h` / `--help` / `--helpo` | Help | **Required** | Configured via `context_settings={"help_option_names": ["-h", "--help", "--helpo"]}`. Do NOT add a bare `helpi` command. |
+| `ls` | List items | **Required** for data modules | Alias `list` → `ls` with deprecation where `list` exists. |
+| `vidi` | View single item detail | **Required** for data modules | Universal "show entry" command. |
+| `aldoni` | Add/create item | **Required** for CRUD modules | |
+| `modifi` | Update/modify item | **Required** for CRUD modules | |
+| `forigi` | Delete item(s) | **Required** for CRUD modules | Accept multiple positional args for bulk delete. |
+| `serci` | Search items | **Required** for data modules | Use ASCII `c` (NOT `serĉi` with diacritic). `serchi` may be kept as deprecated alias. |
+| `importi` | Import data | Recommended | |
+| `eksporti` | Export data | Recommended | |
+| `rubujo` | Trash operations (as subcommand group) | For modules with soft-delete | See "Trash Commands" below. |
+| `malfari` | Undo last operation | Optional | Only if module supports undo (A-core `UndoManager`). |
+
+#### Trash Commands (subcommand group style)
+
+Trash operations **must** be grouped under the `rubujo` subcommand, NOT as top-level commands:
+
+| Command | Purpose |
+|---------|---------|
+| `rubujo ls` | List trashed items |
+| `rubujo restaŭrigi` | Restore item from trash (accept `restauxrigi` as alias for keyboard portability) |
+| `rubujo malplenigi` | Empty trash (delete older than N days) |
+| `rubujo forigi` | Permanently delete specific item from trash |
+
+Implementation pattern (Typer):
+```python
+trash_app = typer.Typer()
+app.add_typer(trash_app, name="rubujo", help=tr_multi(...))
+```
+
+#### Naming Rules
+
+1. **Esperanto names** — all command names in Esperanto
+2. **ASCII only** — avoid diacritics (`ĉ`, `ĝ`, `ĥ`, `ĵ`, `ŝ`, `ŭ`) in command names. Use plain ASCII equivalents:
+   - `serci` not `serĉi`
+   - `restauxrigi` (x-convention) or `restaŭrigi` (if ŭ is acceptable in the locale)
+3. **Do NOT use bare `help`/`helpi` commands** — Typer's `--helpo` flag is sufficient
+4. **Domain-specific commands** (e.g., `konekti`, `restarti`, `generi`) are allowed but should be minimized
+5. **Hidden aliases** — deprecated commands should be registered with `@app.command(hidden=True)` or `deprecated=True`
+
+#### Migration Path
+
+Modules migrating from non-standard names:
+- Keep old names as hidden/deprecated aliases for one release cycle
+- Example: `@app.command("list", hidden=True)` alongside `@app.command("ls")`
 
 ---
 
