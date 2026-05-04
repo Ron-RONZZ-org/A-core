@@ -80,7 +80,12 @@ def print_table(
         )
     """
     if not rows:
-        info("Neniuj rezultoj.")
+        from A import tr_multi
+        info(tr_multi(
+            "Neniuj rezultoj.",
+            "No results.",
+            "Aucun résultat.",
+        ))
         return
 
     table = Table(title=title, show_header=True, header_style="bold")

@@ -13,7 +13,7 @@ from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
 from A.utils import info, success, error, warning, console
-from A.utils.interactive import select_candidate
+from A.utils.interactive import select_candidate, confirm_action
 
 
 # ── Lazy Plugin Loading ──────────────────────────────────────────────────────
@@ -44,11 +44,19 @@ def _load_plugin(name: str) -> typer.main.TyperGroup | None:
     try:
         real = ep.load()
         if not isinstance(real, typer.Typer):
-            error(f"invalid plugin {name}: not a Typer app")
+            error(tr_multi(
+                f"Nevalida kromprogramo '{name}': ne estas Typer-apliko",
+                f"Invalid plugin '{name}': not a Typer app",
+                f"Plugin '{name}' invalide: n'est pas une application Typer",
+            ))
             return None
         return typer.main.get_command(real)
     except Exception as e:
-        error(f"failed to load {name}: {e}")
+        error(tr_multi(
+            f"Malsukcesis sxargi '{name}': {e}",
+            f"Failed to load '{name}': {e}",
+            f"Echec du chargement de '{name}': {e}",
+        ))
         return None
 
 
@@ -185,10 +193,18 @@ def migri_callback(ctx: typer.Context) -> None:
     results = migrate_all()
 
     if not results:
-        info("Neniuj migrationoj haveblas.")
+        info(tr_multi(
+            "Neniuj migradoj haveblas.",
+            "No migrations available.",
+            "Aucune migration disponible.",
+        ))
         return
 
-    success("Rezultoj de migrado:")
+    success(tr_multi(
+        "Rezultoj de migrado:",
+        "Migration results:",
+        "Résultats de la migration:",
+    ))
     for module, result in results.items():
         if result.skipped:
             info(f"  {module}: saltita ({result.skipped_reason})")
@@ -221,11 +237,23 @@ def show_migration_status() -> None:
     discovered = _discover_migrations()
 
     if not discovered:
-        info("Neniuj migr-moduloj trovite.")
-        info("Instalu A-modulojn kun migr-ad funkcioj.")
+        info(tr_multi(
+            "Neniuj migr-moduloj trovite.",
+            "No migration modules found.",
+            "Aucun module de migration trouvé.",
+        ))
+        info(tr_multi(
+            "Instalu A-modulojn kun migradaj funkcioj.",
+            "Install A-modules with migration features.",
+            "Installez des modules A avec fonctions de migration.",
+        ))
         return
 
-    success(f"Migrada stato ({len(discovered)} moduloj):")
+    success(tr_multi(
+        f"Migrada stato ({len(discovered)} moduloj):",
+        f"Migration status ({len(discovered)} modules):",
+        f"Statut de migration ({len(discovered)} modules):",
+    ))
 
     status_map = get_status()
 
@@ -281,10 +309,9 @@ def _ensure_keyring() -> bool:
         importlib.import_module("keyring")
         return True
     except ImportError:
-        import typer
         from A import tr_multi
-        
-        answer = typer.confirm(
+
+        answer = confirm_action(
             tr_multi(
                 "Bezonas 'keyring' bibliotekon. Ĉu instali ĝin nun?",
                 "The 'keyring' library is required. Install it now?",
@@ -294,33 +321,23 @@ def _ensure_keyring() -> bool:
         )
         if not answer:
             return False
-        
+
         try:
             import subprocess
             pip_cmd = _get_pip_command()
-            # Suppress pip output unless it fails
             subprocess.check_call(
                 pip_cmd + ["install", "keyring"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            # Re-import after install
             importlib.import_module("keyring")
             return True
         except Exception as e:
-            error(f"Instalo malsukoresis: {e}")
-            return False
-        
-        try:
-            import subprocess, sys
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "keyring"]
-            )
-            # Re-import after install
-            importlib.import_module("keyring")
-            return True
-        except Exception as e:
-            error(f"Instalo malsukcesis: {e}")
+            error(tr_multi(
+                f"Malsukcesis instali 'keyring': {e}",
+                f"Failed to install 'keyring': {e}",
+                f"Échec de l'installation de 'keyring': {e}",
+            ))
             return False
 
 

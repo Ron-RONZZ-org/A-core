@@ -312,19 +312,37 @@ def set_language(lang: str) -> None:
 
 
 def tr(key: str, lang: str = None) -> str:
-    """Translate a key. Falls back to English then key."""
+    """Translate a key.
+
+    Fallback chain: current_language -> eo (Esperanto) -> en (English) -> key.
+
+    Args:
+        key: Translation key (typically an Esperanto phrase)
+        lang: Optional language override (uses current language if None)
+
+    Returns:
+        Translated string
+    """
     if lang is None:
         lang = _current_lang
-    
+
     # Try current language first
-    if key in _translations.get(lang, {}):
-        return _translations[lang][key]
-    
+    translations = _translations.get(lang)
+    if translations and key in translations:
+        return translations[key]
+
+    # Fall back to Esperanto (primary authoring language)
+    if lang != "eo":
+        eo = _translations.get("eo")
+        if eo and key in eo:
+            return eo[key]
+
     # Fall back to English
-    if key in _translations.get("en", {}):
-        return _translations["en"][key]
-    
-    # Fall back to key itself
+    en = _translations.get("en")
+    if en and key in en:
+        return en[key]
+
+    # Return key itself (already Esperanto-like)
     return key
 
 
@@ -335,7 +353,6 @@ def tr_multi(eo: str, en: str = None, fr: str = None) -> str:
     Falls back: eo -> en -> eo.
     """
     translations = {"eo": eo, "en": en or eo, "fr": fr or en or eo}
-    current = _translations.get(_current_lang, {})
     return translations.get(_current_lang, eo)
 
 
