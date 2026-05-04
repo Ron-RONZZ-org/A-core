@@ -224,8 +224,8 @@ def show_migration_status() -> None:
                 info(f"  {module}: havebla ({st.source_rows} vicoj por migrantadi)")
             else:
                 info(f"  {module}: nehavebla")
-else:
-                info(f"  {module}: neiniciatita")
+    else:
+        info(f"  {module}: neiniciatita")
 
 
 def _get_pip_command():
