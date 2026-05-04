@@ -244,49 +244,6 @@ def _get_legacy_table_name(module: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Keyring migration utilities
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def migrate_keyring_passwords(
-    legacy_prefix: str = "autish-retposto-",
-    new_prefix: str = "A-lien/",
-) -> int:
-    """Migrate passwords from autish keyring pattern to A-* pattern.
-
-    Args:
-        legacy_prefix: Legacy keyring service prefix
-        new_prefix: New keyring service prefix
-
-    Returns:
-        Number of passwords migrated
-    """
-    try:
-        import keyring
-    except ImportError:
-        return -1  # Signal: keyring not available
-
-    migrated = 0
-    try:
-        # Get all passwords with legacy prefix
-        for service in keyring.get_keyring().list_credentials():
-            if service and service.startswith(legacy_prefix):
-                old_service = service
-                new_service = new_prefix + service.replace(legacy_prefix, "")
-
-                # Get password and re-set with new service
-                password = keyring.get_password(old_service, "password")
-                if password:
-                    keyring.set_password(new_service, "password", password)
-                    keyring.delete_password(old_service, "password")
-                    migrated += 1
-    except Exception:
-        pass
-
-    return migrated
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # Exports
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -297,5 +254,4 @@ __all__ = [
     "get_status",
     "migrate_all",
     "register_migration",
-    "migrate_keyring_passwords",
 ]

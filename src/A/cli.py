@@ -9,7 +9,7 @@ from rich.panel import Panel
 
 from A import tr, tr_multi
 from A.core.paths import ensure_dirs
-from A.core.migration import get_status, migrate_all, migrate_keyring_passwords, MigrationStatus
+from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
 from A.utils import info, success, error, warning, console
@@ -224,22 +224,8 @@ def show_migration_status() -> None:
                 info(f"  {module}: havebla ({st.source_rows} vicoj por migrantadi)")
             else:
                 info(f"  {module}: nehavebla")
-        else:
-            info(f"  {module}: neiniciatita")
-
-
-@app.command("migri-keyring")
-def migri_keyring_cmd() -> None:
-    """Migradu pasvortojn de autish al A."""
-    imported = _ensure_keyring()
-    if not imported:
-        raise typer.Exit(1)
-    
-    migrated = migrate_keyring_passwords()
-    if migrated > 0:
-        success(f"{migrated} pasvortoj migrantitaj")
-    else:
-        info("Neniuj pasvortoj por migradi")
+else:
+                info(f"  {module}: neiniciatita")
 
 
 def _get_pip_command():
