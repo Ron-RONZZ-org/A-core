@@ -1,6 +1,5 @@
 """A CLI main entry point."""
 
-import importlib.metadata
 from typing import Callable
 
 import typer
@@ -12,79 +11,13 @@ from A.core.paths import ensure_dirs
 from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
+from A.core.plugin_loader import (
+    _PLUGIN_ENTRY_POINTS,
+    discover_plugin_names,
+    LazyPluginGroup,
+)
 from A.utils import info, success, error, warning, console
 from A.utils.interactive import select_candidate
-
-
-# ── Lazy Plugin Loading ──────────────────────────────────────────────────────
-# Entry points discovered by name only — plugins are loaded on first command use.
-# This means `A retposto ls` won't trigger loading A-sistemo (or other plugins).
-
-_PLUGIN_ENTRY_POINTS: dict[str, importlib.metadata.EntryPoint] = {}
-
-
-def _discover_plugin_names() -> dict[str, importlib.metadata.EntryPoint]:
-    """Discover plugin entry points without loading them.
-
-    Returns: dict mapping plugin name → EntryPoint
-    """
-    try:
-        eps = importlib.metadata.entry_points(group="A.commands")
-    except TypeError:
-        # Python < 3.10
-        eps = importlib.metadata.entry_points().get("A.commands", [])
-    return {ep.name: ep for ep in eps}
-
-
-def _load_plugin(name: str) -> typer.main.TyperGroup | None:
-    """Load a plugin by name, returning a Click/Typer command or None on failure."""
-    ep = _PLUGIN_ENTRY_POINTS.get(name)
-    if ep is None:
-        return None
-    try:
-        real = ep.load()
-        if not isinstance(real, typer.Typer):
-            error(f"invalid plugin {name}: not a Typer app")
-            return None
-        return typer.main.get_command(real)
-    except Exception as e:
-        error(f"failed to load {name}: {e}")
-        return None
-
-
-class LazyPluginGroup(typer.main.TyperGroup):
-    """Click Group that lazy-loads A plugins on first invocation.
-
-    Plugins are not imported at startup — only when the user runs a command
-    that belongs to that plugin. Failed loads are silently dropped from the
-    command list.
-    """
-
-    def get_command(
-        self, ctx: typer.Context, cmd_name: str
-    ) -> typer.main.TyperGroup | None:
-        # Already loaded (built-in command or previously cached)?
-        cmd = super().get_command(ctx, cmd_name)
-        if cmd is not None:
-            return cmd
-
-        # First access — load from entry point
-        if cmd_name in _PLUGIN_ENTRY_POINTS:
-            click_cmd = _load_plugin(cmd_name)
-            if click_cmd is not None:
-                self.add_command(click_cmd, name=cmd_name)
-                return click_cmd
-            # Load failed — remove so we don't try again
-            _PLUGIN_ENTRY_POINTS.pop(cmd_name, None)
-
-        return None
-
-    def list_commands(self, ctx: typer.Context) -> list[str]:
-        cmds = list(super().list_commands(ctx))
-        for name in _PLUGIN_ENTRY_POINTS:
-            if name not in cmds:
-                cmds.append(name)
-        return [c for c in cmds if not c.startswith("_")]
 
 
 # ── Main App ─────────────────────────────────────────────────────────────────
@@ -570,7 +503,7 @@ def main():
     ensure_dirs()
 
     # Populate plugin entry points (names only — no module loading)
-    _PLUGIN_ENTRY_POINTS.update(_discover_plugin_names())
+    _PLUGIN_ENTRY_POINTS.update(discover_plugin_names())
 
     # Run — plugins loaded lazily on first use
     app()
