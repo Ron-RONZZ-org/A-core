@@ -26,8 +26,8 @@ PLAIN_REF_RE = re.compile(
     re.IGNORECASE
 )
 
-# UUID pattern (with or without hyphens)
-UUID_RE = re.compile(r'[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}', re.IGNORECASE)
+# UUID pattern (short 8-char or full with/without hyphens)
+UUID_RE = re.compile(r'[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}|[0-9a-f]{8}(?![0-9a-f])', re.IGNORECASE)
 
 
 @dataclass
@@ -168,14 +168,15 @@ def _resolve_vorto_ref(uuid: str) -> ResolvedRef:
     """Resolve a vorto reference."""
     try:
         from A_vorto.service import get_service
-        
+
         service = get_service()
-        entry = service.get_by_id(uuid)
-        
+        entry = service.get(uuid)  # Uses prefix fallback
+
         if entry:
+            resolved_uuid = entry.get("uuid", uuid)
             return ResolvedRef(
                 ref_type="vt",
-                uuid=uuid,
+                uuid=resolved_uuid,
                 label=entry.get("teksto", ""),
                 exists=True,
                 title=entry.get("teksto", ""),
@@ -197,14 +198,15 @@ def _resolve_encik_ref(uuid: str) -> ResolvedRef:
     """Resolve an encik reference."""
     try:
         from A_encik.service import get_service
-        
+
         service = get_service()
-        entry = service.get_by_id(uuid)
-        
+        entry = service.get(uuid)  # Uses prefix fallback
+
         if entry:
+            resolved_uuid = entry.get("uuid", uuid)
             return ResolvedRef(
                 ref_type="ec",
-                uuid=uuid,
+                uuid=resolved_uuid,
                 label=entry.get("titolo", ""),
                 exists=True,
                 title=entry.get("titolo", ""),
