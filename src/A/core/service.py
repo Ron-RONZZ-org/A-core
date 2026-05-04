@@ -308,7 +308,7 @@ class CRUDService:
             results = process.extract(
                 folded_query,
                 folded_texts,
-                scorer=fuzz.ratio,
+                scorer=fuzz.partial_ratio,
                 limit=limit,
                 score_cutoff=threshold * 100,  # rapidfuzz uses 0-100 scale
             )
@@ -324,9 +324,13 @@ class CRUDService:
             scored = []
             for entry in candidates:
                 text = str(entry.get(target_field, ""))
-                score = SequenceMatcher(
-                    None, query.casefold(), text.casefold()
-                ).ratio()
+                text_lower = text.casefold()
+                query_lower = query.casefold()
+                # Use partial ratio: if query is a substring of text, score high
+                if query_lower in text_lower:
+                    score = max(threshold + 0.1, min(1.0, len(query_lower) / len(text_lower) + 0.8))
+                else:
+                    score = SequenceMatcher(None, query_lower, text_lower).ratio()
                 if score >= threshold:
                     scored.append((score, entry))
             scored.sort(key=lambda x: x[0], reverse=True)
