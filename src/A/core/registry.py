@@ -216,17 +216,19 @@ def get_installed_modules() -> list[dict]:
     except TypeError:
         eps = importlib.metadata.entry_points().get("A.commands", [])
 
-    # Build a lookup from name → manifest entry (cached)
+    # Build a lookup from name → manifest entry (cached), case-insensitive
     manifest = fetch_registry()
     manifest_lookup: dict[str, dict] = {}
     if manifest:
         for m in manifest["modules"]:
-            manifest_lookup[m["name"]] = m
+            manifest_lookup[m["name"].lower()] = m
 
     for ep in eps:
         name = ep.name
-        if name in manifest_lookup:
-            installed.append(dict(manifest_lookup[name]))
+        # Case-insensitive lookup
+        lookup_key = name.lower()
+        if lookup_key in manifest_lookup:
+            installed.append(dict(manifest_lookup[lookup_key]))
         else:
             installed.append({
                 "name": name,

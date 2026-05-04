@@ -470,7 +470,6 @@ def _show_module_info(module: dict) -> None:
     )
     console.print(panel)
     console.print(f"[dim]Stato: {status_text}[/dim]")
-    console.print(panel)
 
 
 @modulo_app.command("info")
