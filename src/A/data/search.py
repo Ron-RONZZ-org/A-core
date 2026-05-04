@@ -106,9 +106,9 @@ def build_search_query(
     else:
         normalized_query = query
 
-    # Escape FTS5 special characters and wrap in quotes for phrase matching
+    # Escape FTS5 special characters and use prefix matching
     escaped = normalized_query.replace('"', '""')
-    fts_query = f'"{escaped}"'
+    fts_query = f'"{escaped}"*'
 
     where_clauses = [f"{config.fts_table} MATCH ?"]
     params: list = [fts_query]
