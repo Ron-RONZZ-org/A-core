@@ -20,9 +20,14 @@ STYLES = {
 console = Console(markup=True, emoji=False, highlight=False, safe_box=True)
 
 
-def info(message: str) -> None:
-    """Print info message (dim)."""
-    console.print(message, style=STYLES["info"])
+def info(message: str, nl: bool = True) -> None:
+    """Print info message (dim).
+    
+    Args:
+        message: Message to print
+        nl: If False, don't print newline
+    """
+    console.print(message, style=STYLES["info"], end="" if not nl else "\n")
 
 
 def success(message: str) -> None:
