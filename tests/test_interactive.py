@@ -130,24 +130,100 @@ def test_select_row_formatter_called(mock_prompt):
 # ── confirm_action ───────────────────────────────────────────────────────────
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_yes(mock_confirm):
-    """confirm_action returns True when confirmed."""
-    mock_confirm.return_value = True
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_yes_en(mock_prompt, mock_lang):
+    """English: entering 'y' returns True, prompt has [y/n]."""
+    mock_lang.return_value = "en"
+    mock_prompt.return_value = "y"
     assert confirm_action("Proceed?") is True
-    mock_confirm.assert_called_with("Proceed?", default=False)
+    mock_prompt.assert_called_once_with("Proceed? [y/n]", default="n")
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_no(mock_confirm):
-    """confirm_action returns False when declined."""
-    mock_confirm.return_value = False
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_no_en(mock_prompt, mock_lang):
+    """English: entering 'n' returns False."""
+    mock_lang.return_value = "en"
+    mock_prompt.return_value = "n"
     assert confirm_action("Proceed?") is False
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_default(mock_confirm):
-    """Default value is passed to typer.confirm."""
-    mock_confirm.return_value = True
-    confirm_action("Proceed?", default=True)
-    mock_confirm.assert_called_with("Proceed?", default=True)
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_yes_eo(mock_prompt, mock_lang):
+    """Esperanto: prompt has [j/n], entering 'j' returns True."""
+    mock_lang.return_value = "eo"
+    mock_prompt.return_value = "j"
+    assert confirm_action("Proceed?") is True
+    mock_prompt.assert_called_once_with("Proceed? [j/n]", default="n")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_yes_fr(mock_prompt, mock_lang):
+    """French: prompt has [o/n], entering 'o' returns True."""
+    mock_lang.return_value = "fr"
+    mock_prompt.return_value = "o"
+    assert confirm_action("Proceed?") is True
+    mock_prompt.assert_called_once_with("Proceed? [o/n]", default="n")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_default_true(mock_prompt, mock_lang):
+    """default=True: prompt default is the yes_char; empty input returns True."""
+    mock_lang.return_value = "en"
+    mock_prompt.return_value = ""
+    assert confirm_action("Proceed?", default=True) is True
+    mock_prompt.assert_called_once_with("Proceed? [y/n]", default="y")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_default_false_empty(mock_prompt, mock_lang):
+    """default=False: prompt default is the no_char; empty input returns False."""
+    mock_lang.return_value = "en"
+    mock_prompt.return_value = ""
+    assert confirm_action("Proceed?", default=False) is False
+    mock_prompt.assert_called_once_with("Proceed? [y/n]", default="n")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_yes_char_override(mock_prompt, mock_lang):
+    """yes_char overrides the language-based default prompt suffix."""
+    mock_lang.return_value = "eo"  # eo normally uses [j/n]
+    mock_prompt.return_value = "y"
+    assert confirm_action("Proceed?", yes_char="y") is True
+    mock_prompt.assert_called_once_with("Proceed? [y/n]", default="n")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_no_char_override(mock_prompt, mock_lang):
+    """no_char overrides the language-based default prompt suffix."""
+    mock_lang.return_value = "en"  # en normally uses [y/n]
+    mock_prompt.return_value = "x"
+    assert confirm_action("Proceed?", no_char="x") is False
+    mock_prompt.assert_called_once_with("Proceed? [y/x]", default="x")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_unknown_language_fallback(mock_prompt, mock_lang):
+    """Unsupported language falls back to [y/n]."""
+    mock_lang.return_value = "de"
+    mock_prompt.return_value = "y"
+    assert confirm_action("Proceed?") is True
+    mock_prompt.assert_called_once_with("Proceed? [y/n]", default="n")
+
+
+@patch("A.core.i18n.get_current_language")
+@patch("A.utils.interactive.typer.prompt")
+def test_confirm_retry_on_invalid(mock_prompt, mock_lang):
+    """Invalid input retries the prompt (loop continues until valid)."""
+    mock_lang.return_value = "en"
+    mock_prompt.side_effect = ["maybe", "y"]
+    assert confirm_action("Proceed?") is True
+    assert mock_prompt.call_count == 2

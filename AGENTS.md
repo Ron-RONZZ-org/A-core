@@ -94,6 +94,21 @@ src/A/
 | Dynamic/runtime strings | `tr_multi(eo, en, fr)` inline |
 | Docstrings (internal) | English (not user-facing) |
 
+### i18n Fallback Rules
+
+- **`tr()` fallback chain:** `current_language → eo (Esperanto) → en (English) → key`
+- **`tr_multi()` fallback chain:** `eo → en → fr` (each parameter falls back to the previous)
+- **`confirm_action()` prompt suffix** adapts to the current language:
+  - `eo`: `[j/n]` (jes/ne)
+  - `en`: `[y/n]` (yes/no)
+  - `fr`: `[o/n]` (oui/non)
+
+### i18n Rules
+
+1. All user-facing strings in `error()`, `info()`, `success()`, `warning()` MUST use `tr()` or `tr_multi()`
+2. Never hardcode Esperanto strings directly in CLI output — always wrap in `tr_multi()` for consistency
+3. Always provide Esperanto as first argument, English second, French third
+
 ---
 
 ## Code Standards

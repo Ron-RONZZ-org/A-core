@@ -89,12 +89,26 @@ def select_candidate(
     return None
 
 
+_CONFIRM_PROMPTS: dict[str, tuple[str, str]] = {
+    "eo": ("j", "n"),  # jes / ne
+    "en": ("y", "n"),  # yes / no
+    "fr": ("o", "n"),  # oui / non
+}
+
+
 def confirm_action(
     message: str,
     *,
     default: bool = False,
+    yes_char: str | None = None,
+    no_char: str | None = None,
 ) -> bool:
-    """Display a yes/no confirmation prompt.
+    """Display a yes/no confirmation prompt with locale-aware characters.
+
+    The prompt suffix adapts to the current language:
+    - eo: ``[j/n]`` (jes/ne)
+    - en: ``[y/n]`` (yes/no)
+    - fr: ``[o/n]`` (oui/non)
 
     Parameters
     ----------
@@ -102,9 +116,29 @@ def confirm_action(
         The question to show.
     default:
         Default answer (used when user presses Enter).
+    yes_char:
+        Override the "yes" character (default: from current language).
+    no_char:
+        Override the "no" character (default: from current language).
 
     Returns
     -------
     ``True`` if confirmed, ``False`` otherwise.
     """
-    return typer.confirm(message, default=default)
+    from A.core.i18n import get_current_language
+
+    lang = get_current_language()
+    default_yes, default_no = _CONFIRM_PROMPTS.get(lang, ("y", "n"))
+    yes = (yes_char or default_yes).lower()
+    no = (no_char or default_no).lower()
+
+    prompt_suffix = f" [{yes}/{no}]"
+    default_str = yes if default else no
+
+    while True:
+        raw = typer.prompt(message + prompt_suffix, default=default_str)
+        raw = raw.strip().lower()
+        if raw == yes:
+            return True
+        if raw == no or not raw:
+            return default
