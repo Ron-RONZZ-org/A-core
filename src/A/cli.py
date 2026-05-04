@@ -95,17 +95,16 @@ app = typer.Typer(
     help=tr("A - minimuma CLI kadro"),
     no_args_is_help=True,
     pretty_exceptions_short=True,
+    context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
 )
 
 
 @app.callback(invoke_without_command=True)
 def main_callback(
     ctx: typer.Context,
-    h: bool = typer.Option(None, "-h", "--help", help="Montri helpon", is_eager=True),
 ) -> None:
     """A - minimuma CLI kadro."""
-    if h is not None:
-        typer.echo(ctx.get_help())
+    pass
 
 
 @app.command("list")
@@ -156,7 +155,7 @@ def _discover_migrations() -> dict[str, Callable[[], None]]:
 
 
 def _register_migrations() -> None:
-    """Register all discovered migrations by calling their registration functions."""
+    """Register all available migrations."""
     for module, migrator in _discover_migrations().items():
         try:
             migrator()
@@ -164,44 +163,57 @@ def _register_migrations() -> None:
             warning(f"failed to register migration for {module}: {e}")
 
 
-@app.command("migri")
-def migri_cmd(
-    status: bool = typer.Option(
-        False,
-        "--status",
-        "-s",
-        help=tr("Montri staton de cxiuj migradoj"),
-    ),
-    list_cmd: bool = typer.Option(
-        False,
-        "--list",
-        "-l",
-        help=tr("Listigi cxiujn disponeblajn migradojn"),
-    ),
-) -> None:
-    """Montri migr-adolon aŭ migradan staton."""
-    _register_migrations()
+# ── Migration Sub-App ───────────────────────────────────────────────────────
 
-    if status or list_cmd:
-        show_migration_status()
+migri_app = typer.Typer(
+    name="migri",
+    help=tr("Administri migradojn de autish al A-moduloj"),
+    no_args_is_help=False,
+    invoke_without_command=True,
+    context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
+)
+
+
+@migri_app.callback(invoke_without_command=True)
+def migri_callback(ctx: typer.Context) -> None:
+    """Run all pending migrations (default, no subcommand)."""
+    # Only run if no subcommand was invoked
+    if ctx.invoked_subcommand is not None:
         return
 
+    _register_migrations()
     results = migrate_all()
 
     if not results:
         info("Neniuj migrationoj haveblas.")
         return
 
-    success("Rezultoj de migr-adolo:")
+    success("Rezultoj de migrado:")
     for module, result in results.items():
         if result.skipped:
             info(f"  {module}: saltita ({result.skipped_reason})")
         elif result.errors:
-            detail_msg = f" {result.detail}" if result.detail else ""
-            error(f"  {module}: {result.migrated_rows}/{result.source_rows}{detail_msg} eraroj: {len(result.errors)}")
+            error(f"  {module}: {result.migrated_rows}/{result.source_rows} — eraroj: {len(result.errors)}")
         else:
-            detail_msg = f" {result.detail}" if result.detail else ""
-            success(f"  {module}: {result.migrated_rows}/{result.source_rows}{detail_msg} ✓")
+            success(f"  {module}: {result.migrated_rows}/{result.source_rows} migritaj")
+
+
+@migri_app.command("ls")
+def migri_ls() -> None:
+    """List available migrations."""
+    _register_migrations()
+    show_migration_status()
+
+
+@migri_app.command("statuso")
+def migri_statuso() -> None:
+    """Show migration status."""
+    _register_migrations()
+    show_migration_status()
+
+
+# Register migri as subcommand
+app.add_typer(migri_app, name="migri")
 
 
 def show_migration_status() -> None:
@@ -317,11 +329,12 @@ def _ensure_keyring() -> bool:
 modulo_app = typer.Typer(
     name="modulo",
     help=tr_multi(
-        "Moduloj — administrado de A-moduloj",
+        "Moduloj — administered de A-moduloj",
         "Modules — A module management",
         "Modules — gestion des modules A",
     ),
     no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help", "--helpo"]},
 )
 
 
