@@ -6,6 +6,7 @@ from A.utils.editor import edit_text, edit_file
 from A.utils.date import parse_partial_date, parse_partial_datetime
 from A.utils.expr import eval_safe, validate_safe
 from A.utils.clipboard import copy_to_clipboard, copy_file
+from A.utils.serialize import serialize_json_columns, deserialize_json_columns
 
 __all__ = [
     "info",
@@ -25,4 +26,6 @@ __all__ = [
     "validate_safe",
     "copy_to_clipboard",
     "copy_file",
+    "serialize_json_columns",
+    "deserialize_json_columns",
 ]
