@@ -242,13 +242,41 @@ def migri_keyring_cmd() -> None:
         info("Neniuj pasvortoj por migradi")
 
 
+def _get_pip_command():
+    """Find the best available pip command, respecting venv isolation.
+    
+    Returns:
+        list: pip command arguments ready for subprocess
+    """
+    import shutil, os
+    
+    # 1. Try uv pip first (uv-managed venvs preserve isolation)
+    uv_cmd = shutil.which("uv")
+    if uv_cmd:
+        return [uv_cmd, "pip"]
+    
+    # 2. Try pip in PATH
+    pip_cmd = shutil.which("pip") or shutil.which("pip3")
+    if pip_cmd:
+        return [pip_cmd]
+    
+    # 3. Try python3 -m pip
+    python3 = shutil.which("python3")
+    if python3:
+        return [python3, "-m", "pip"]
+    
+    # 4. Last resort: sys.executable (may break isolation in broken venvs)
+    import sys
+    return [sys.executable, "-m", "pip"]
+
+
 def _ensure_keyring() -> bool:
     """Ensure the keyring library is available, offering to install if not.
     
     Returns:
         True if keyring is available, False if user declined.
     """
-    import importlib, shutil
+    import importlib
     try:
         importlib.import_module("keyring")
         return True
@@ -268,28 +296,14 @@ def _ensure_keyring() -> bool:
             return False
         
         try:
-            # Find pip - try external pip first, then sys.executable
-            pip_cmd = shutil.which("pip") or shutil.which("pip3")
-            if not pip_cmd:
-                # Fall back to trying python -m pip with sys.executable
-                import subprocess, sys
-                try:
-                    subprocess.check_call(
-                        [sys.executable, "-m", "pip", "install", "keyring"],
-                        stderr=subprocess.DEVNULL,
-                    )
-                except Exception:
-                    # Last resort: try python3 from PATH
-                    pip_cmd = shutil.which("python3")
-                    if pip_cmd:
-                        subprocess.check_call(
-                            [pip_cmd, "-m", "pip", "install", "keyring"],
-                        )
-                    else:
-                        raise RuntimeError("pip not available")
-            else:
-                subprocess.check_call([pip_cmd, "install", "keyring"])
-            
+            import subprocess
+            pip_cmd = _get_pip_command()
+            # Suppress pip output unless it fails
+            subprocess.check_call(
+                pip_cmd + ["install", "keyring"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             # Re-import after install
             importlib.import_module("keyring")
             return True
