@@ -248,7 +248,7 @@ def _ensure_keyring() -> bool:
     Returns:
         True if keyring is available, False if user declined.
     """
-    import importlib
+    import importlib, shutil
     try:
         importlib.import_module("keyring")
         return True
@@ -265,6 +265,36 @@ def _ensure_keyring() -> bool:
             default=True,
         )
         if not answer:
+            return False
+        
+        try:
+            # Find pip - try external pip first, then sys.executable
+            pip_cmd = shutil.which("pip") or shutil.which("pip3")
+            if not pip_cmd:
+                # Fall back to trying python -m pip with sys.executable
+                import subprocess, sys
+                try:
+                    subprocess.check_call(
+                        [sys.executable, "-m", "pip", "install", "keyring"],
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception:
+                    # Last resort: try python3 from PATH
+                    pip_cmd = shutil.which("python3")
+                    if pip_cmd:
+                        subprocess.check_call(
+                            [pip_cmd, "-m", "pip", "install", "keyring"],
+                        )
+                    else:
+                        raise RuntimeError("pip not available")
+            else:
+                subprocess.check_call([pip_cmd, "install", "keyring"])
+            
+            # Re-import after install
+            importlib.import_module("keyring")
+            return True
+        except Exception as e:
+            error(f"Instalo malsukoresis: {e}")
             return False
         
         try:

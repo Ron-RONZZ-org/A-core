@@ -111,8 +111,11 @@ When a command requires an optional dependency that is not installed:
 
 1. **Ask user**: "The 'X' library is required. Install it now?"
 2. **Default to yes**: `typer.confirm(..., default=True)`
-3. **Install on confirmation**: `subprocess.check_call([sys.executable, "-m", "pip", "install", "X"])`
-4. **Exit gracefully** if user declines
+3. **Install on confirmation**: Use fallback chain:
+   - First try: `shutil.which("pip")` or `shutil.which("pip3")` (external pip)
+   - Second try: `python3 -m pip` (if pip not in PATH)
+   - Third try: `sys.executable -m pip` (last resort - may fail in venvs without pip)
+4. **Exit gracefully** if user declines or install fails
 
 ---
 
