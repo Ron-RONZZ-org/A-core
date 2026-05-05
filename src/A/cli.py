@@ -498,6 +498,46 @@ def modulo_info(
 app.add_typer(modulo_app, name="modulo")
 
 
+@app.command("repl")
+def repl(
+    ctx: typer.Context,
+    module_name: str = typer.Argument(
+        ...,
+        help=tr_multi(
+            "Nomo de la modulo por eniri REPL-re\u011dimon",
+            "Module name to enter REPL mode",
+            "Nom du module pour entrer en mode REPL",
+        ),
+    ),
+) -> None:
+    """Eniri interagan REPL-re\u011dimon por A-modulo.
+
+    In the REPL, type subcommands directly without the 'A <module>' prefix.
+    Use 'exit' or Ctrl+D to quit, '!' for shell commands.
+    """
+    from A.core.plugin_loader import _PLUGIN_ENTRY_POINTS, get_plugin_app
+    from A.utils.repl import ModuleREPL
+
+    if module_name not in _PLUGIN_ENTRY_POINTS:
+        error(tr_multi(
+            f"Modulo '{module_name}' ne estas instalita a\u016d trovita.",
+            f"Module '{module_name}' is not installed or not found.",
+            f"Module '{module_name}' n'est pas install\u00e9 ou introuvable.",
+        ))
+        raise typer.Exit(1)
+
+    app = get_plugin_app(module_name)
+    if app is None:
+        error(tr_multi(
+            f"Ne eblas \u015dargi modulon '{module_name}'.",
+            f"Cannot load module '{module_name}'.",
+            f"Impossible de charger le module '{module_name}'.",
+        ))
+        raise typer.Exit(1)
+
+    ModuleREPL(module_name=module_name, module_app=app).cmdloop()
+
+
 def main():
     """Main entry point."""
     ensure_dirs()

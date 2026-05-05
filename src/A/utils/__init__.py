@@ -7,6 +7,7 @@ from A.utils.date import parse_partial_date, parse_partial_datetime
 from A.utils.expr import eval_safe, validate_safe
 from A.utils.clipboard import copy_to_clipboard, copy_file
 from A.utils.serialize import serialize_json_columns, deserialize_json_columns
+from A.utils.repl import ModuleREPL
 
 __all__ = [
     "info",

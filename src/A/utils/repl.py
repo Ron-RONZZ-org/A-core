@@ -1,0 +1,151 @@
+"""REPL loop for A-modules using stdlib ``cmd.Cmd``.
+
+Usage::
+
+    from A.core.plugin_loader import get_plugin_app
+    from A.utils.repl import ModuleREPL
+
+    app = get_plugin_app("tempo")
+    ModuleREPL(module_name="tempo", module_app=app).cmdloop()
+"""
+
+from __future__ import annotations
+
+import cmd
+import os
+import shlex
+from pathlib import Path
+
+from A.core.paths import state_dir
+from A.utils.output import info, error, console
+
+HISTORY_LENGTH = 1000
+
+
+class ModuleREPL(cmd.Cmd):
+    """Interactive REPL for a single A-module's Typer app.
+
+    Attributes:
+        module_name: Name of the module (shown in prompt).
+        module_app: The ``typer.Typer`` instance to dispatch commands to.
+        prompt: The REPL prompt string (``{module_name}> ``).
+    """
+
+    intro = (
+        "REPL-mode. Type help or ? for commands, exit to quit.\n"
+        "  !<cmd>  run a shell command"
+    )
+
+    def __init__(self, module_name: str, module_app) -> None:
+        super().__init__()
+        self.module_name = module_name
+        self.module_app = module_app
+        self.prompt = f"{module_name}> "
+        self._hist_path: Path | None = None
+        self._load_history()
+
+    # ── History ────────────────────────────────────────────────────────────
+
+    def _load_history(self) -> None:
+        """Load command history from ``state_dir/repl/<module>.history``."""
+        try:
+            import readline  # noqa: F401
+        except ImportError:
+            return
+
+        import readline as rl
+
+        hist_dir = state_dir() / "repl"
+        hist_dir.mkdir(parents=True, exist_ok=True)
+        self._hist_path = hist_dir / f"{self.module_name}.history"
+        try:
+            rl.read_history_file(str(self._hist_path))
+        except (FileNotFoundError, OSError):
+            pass
+        rl.set_history_length(HISTORY_LENGTH)
+
+    def _save_history(self) -> None:
+        """Persist command history to disk."""
+        if self._hist_path is None:
+            return
+        try:
+            import readline as rl
+
+            rl.write_history_file(str(self._hist_path))
+        except (ImportError, OSError):
+            pass
+
+    # ── Lifecycle hooks ────────────────────────────────────────────────────
+
+    def preloop(self) -> None:
+        info(self.intro)
+
+    def postloop(self) -> None:
+        self._save_history()
+
+    # ── Command dispatch ───────────────────────────────────────────────────
+
+    def onecmd(self, line: str) -> bool:
+        """Intercept ``!``-prefixed lines before dispatch."""
+        if line.startswith("!"):
+            self.do_shell(line[1:])
+            return False
+        return super().onecmd(line)
+
+    def default(self, line: str) -> None:
+        """Pass an unrecognized line as arguments to the module's Typer app.
+
+        Example: typing ``resumu --limo 5`` in the REPL invokes
+        ``module_app(args=["resumu", "--limo", "5"])``.
+        """
+        try:
+            args = shlex.split(line)
+            if not args:
+                return
+            self.module_app(args=args)
+        except SystemExit:
+            pass  # Typer/Click uses SystemExit for --help, errors, etc.
+        except Exception as e:
+            error(str(e))
+
+    def emptyline(self) -> None:
+        """Do nothing on empty line (don't repeat last command)."""
+        pass
+
+    # ── Built-in REPL commands ─────────────────────────────────────────────
+
+    def do_exit(self, _arg: str) -> bool:
+        """Exit the REPL."""
+        return True
+
+    do_quit = do_exit
+
+    def do_help(self, _arg: str) -> None:
+        """Show the module's help (same as ``--help``)."""
+        self.default("--help")
+
+    def do_shell(self, arg: str) -> None:
+        """Run a shell command. Usage: ``!<command>`` or ``shell <command>``."""
+        if arg:
+            os.system(arg)
+
+    # ── Ctrl+C / Ctrl+D ────────────────────────────────────────────────────
+
+    def cmdloop(self, intro: str | None = None) -> None:
+        """Override to handle Ctrl+C (stay in REPL) and Ctrl+D (exit)."""
+        while True:
+            try:
+                super().cmdloop(intro="")
+                break
+            except KeyboardInterrupt:
+                console.print()
+                continue
+
+    def do_EOF(self, _arg: str) -> bool:
+        """Ctrl+D — exit the REPL."""
+        return True
+
+
+__all__ = [
+    "ModuleREPL",
+]

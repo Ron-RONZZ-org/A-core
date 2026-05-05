@@ -91,6 +91,30 @@ def load_plugin(name: str) -> typer.main.TyperGroup | None:
         return None
 
 
+def get_plugin_app(name: str) -> typer.Typer | None:
+    """Load a plugin and return the raw ``typer.Typer`` app (not Click-wrapped).
+
+    Unlike ``load_plugin()`` which returns a Click command for CLI dispatch,
+    this returns the raw Typer app suitable for programmatic invocation via
+    ``app(args=[...])`` (e.g. in the REPL).
+
+    Injects AI commands from A-agento if available.
+    """
+    ep = _PLUGIN_ENTRY_POINTS.get(name)
+    if ep is None:
+        return None
+    try:
+        app = ep.load()
+        if not isinstance(app, typer.Typer):
+            error(f"Invalid plugin {name}: not a Typer app")
+            return None
+        _inject_ai_commands(app, name)
+        return app
+    except Exception as e:
+        error(f"Failed to load {name}: {e}")
+        return None
+
+
 class LazyPluginGroup(typer.main.TyperGroup):
     """Click Group that lazy-loads A plugins on first invocation.
 
