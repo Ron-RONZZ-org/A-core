@@ -223,6 +223,29 @@ class CRUDService:
             f"SELECT * FROM {self.table} WHERE {field} = ?", (value,)
         )
 
+    def find_by_uuid_prefix(self, prefix: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Find all entries whose UUID starts with the given prefix.
+
+        Returns multiple matches so callers can handle disambiguation.
+        Use this when you need to show "multiple matches" UX.
+        Use get() when you want silent first-match behavior.
+
+        Args:
+            prefix: UUID prefix (8+ hex chars recommended)
+            limit: Max results (default 10)
+
+        Returns:
+            List of matching entries, ordered by creation date desc.
+            Empty list if prefix is empty or no matches.
+        """
+        if not prefix:
+            return []
+        return self.db.execute(
+            f"SELECT * FROM {self.table} WHERE uuid LIKE ? "
+            f"ORDER BY kreita_je DESC LIMIT ?",
+            (f"{prefix}%", limit),
+        )
+
     def search(
         self, field: str, query: str, case_sensitive: bool = False
     ) -> list[dict[str, Any]]:
