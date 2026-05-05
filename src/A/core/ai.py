@@ -837,6 +837,35 @@ def get_default_provider() -> str:
     return _default_provider
 
 
+def _load_provider_config(provider_type: str) -> dict[str, Any]:
+    """Load provider metadata (model, base_url) from A-agento config.
+
+    Uses runtime detection — A-agento is optional.
+
+    Args:
+        provider_type: Provider name (e.g. "openai", "deepseek").
+
+    Returns:
+        Dict with "model" and/or "base_url" keys if found.
+    """
+    try:
+        from A_agento.data.provider_config import get_provider_config
+
+        config = get_provider_config(provider_type)
+        if config:
+            result: dict[str, Any] = {}
+            if config.get("modelo"):
+                result["model"] = config["modelo"]
+            if config.get("base_url"):
+                result["base_url"] = config["base_url"]
+            return result
+    except ImportError:
+        pass
+    except Exception:
+        pass  # Gracefully handle any DB/import errors
+    return {}
+
+
 def get_provider(
     provider_type: str | None = None,
     **kwargs: Any,
@@ -882,6 +911,8 @@ def get_provider(
                 "  3. Keyring: python -c \"from A.core.ai import save_api_key; "
                 "save_api_key('your-token', 'huggingface')\""
             )
+        cfg = _load_provider_config(provider_type)
+        kwargs.setdefault("model", cfg.get("model", "mistralai/Mistral-7B-Instruct-v0.3"))
         return HuggingFaceProvider(api_token=api_token, **kwargs)
 
     elif provider_type == "deepseek":
@@ -894,6 +925,10 @@ def get_provider(
                 "  3. Keyring: python -c \"from A.core.ai import save_api_key; "
                 "save_api_key('your-key', 'deepseek')\""
             )
+        cfg = _load_provider_config(provider_type)
+        kwargs.setdefault("model", cfg.get("model", "deepseek-chat"))
+        if cfg.get("base_url"):
+            kwargs.setdefault("base_url", cfg["base_url"])
         return DeepSeekProvider(api_key=api_key, **kwargs)
 
     elif provider_type == "openai":
@@ -906,9 +941,16 @@ def get_provider(
                 "  3. Keyring: python -c \"from A.core.ai import save_api_key; "
                 "save_api_key('your-key', 'openai')\""
             )
+        cfg = _load_provider_config(provider_type)
+        kwargs.setdefault("model", cfg.get("model", "gpt-3.5-turbo"))
+        if cfg.get("base_url"):
+            kwargs.setdefault("base_url", cfg["base_url"])
         return OpenAIProvider(api_key=api_key, **kwargs)
 
     elif provider_type == "ollama":
+        cfg = _load_provider_config(provider_type)
+        if cfg.get("model"):
+            kwargs.setdefault("model", cfg["model"])
         return OllamaProvider(**kwargs)
 
     else:
