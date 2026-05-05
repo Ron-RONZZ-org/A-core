@@ -176,31 +176,9 @@ def show_migration_status() -> None:
 
 
 def _get_pip_command():
-    """Find the best available pip command, respecting venv isolation.
-    
-    Returns:
-        list: pip command arguments ready for subprocess
-    """
-    import shutil, os
-    
-    # 1. Try uv pip first (uv-managed venvs preserve isolation)
-    uv_cmd = shutil.which("uv")
-    if uv_cmd:
-        return [uv_cmd, "pip"]
-    
-    # 2. Try pip in PATH
-    pip_cmd = shutil.which("pip") or shutil.which("pip3")
-    if pip_cmd:
-        return [pip_cmd]
-    
-    # 3. Try python3 -m pip
-    python3 = shutil.which("python3")
-    if python3:
-        return [python3, "-m", "pip"]
-    
-    # 4. Last resort: sys.executable (may break isolation in broken venvs)
-    import sys
-    return [sys.executable, "-m", "pip"]
+    """Find the best available pip command."""
+    from A.utils.deps import get_pip_command
+    return get_pip_command()
 
 
 def _ensure_keyring() -> bool:
@@ -209,52 +187,12 @@ def _ensure_keyring() -> bool:
     Returns:
         True if keyring is available, False if user declined.
     """
-    import importlib
+    from A.utils.deps import ensure_dependency
     try:
-        importlib.import_module("keyring")
+        ensure_dependency("keyring")
         return True
     except ImportError:
-        import typer
-        from A import tr_multi
-        
-        answer = typer.confirm(
-            tr_multi(
-                "Bezonas 'keyring' bibliotekon. Ĉu instali ĝin nun?",
-                "The 'keyring' library is required. Install it now?",
-                "La bibliothèque 'keyring' est nécessaire. Installer maintenant ?",
-            ),
-            default=True,
-        )
-        if not answer:
-            return False
-        
-        try:
-            import subprocess
-            pip_cmd = _get_pip_command()
-            # Suppress pip output unless it fails
-            subprocess.check_call(
-                pip_cmd + ["install", "keyring"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            # Re-import after install
-            importlib.import_module("keyring")
-            return True
-        except Exception as e:
-            error(f"Instalo malsukoresis: {e}")
-            return False
-        
-        try:
-            import subprocess, sys
-            subprocess.check_call(
-                [sys.executable, "-m", "pip", "install", "keyring"]
-            )
-            # Re-import after install
-            importlib.import_module("keyring")
-            return True
-        except Exception as e:
-            error(f"Instalo malsukcesis: {e}")
-            return False
+        return False
 
 
 # ── Modulo sub-app ────────────────────────────────────────────────────────────

@@ -245,12 +245,9 @@ class OpenAIProvider(BaseProvider):
         if self._client is not None:
             return self._client
 
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError(
-                "openai library not installed. Install with: pip install openai"
-            )
+        from A.utils.deps import ensure_dependency
+        ensure_dependency("openai")
+        from openai import OpenAI
 
         kwargs: dict[str, Any] = {}
         if self._api_key:
@@ -382,12 +379,9 @@ class OllamaProvider(BaseProvider):
         """Make request to Ollama API."""
         import json
 
-        try:
-            import httpx
-        except ImportError:
-            raise ImportError(
-                "httpx library not installed. Install with: pip install httpx"
-            )
+        from A.utils.deps import ensure_dependency
+        ensure_dependency("httpx")
+        import httpx
 
         params = self._get_common_params()
         params.update(kwargs)
@@ -434,12 +428,9 @@ class OllamaProvider(BaseProvider):
         """
         import json
 
-        try:
-            import httpx
-        except ImportError:
-            raise ImportError(
-                "httpx library not installed. Install with: pip install httpx"
-            )
+        from A.utils.deps import ensure_dependency
+        ensure_dependency("httpx")
+        import httpx
 
         params = self._get_common_params()
         params.update(kwargs)
@@ -501,12 +492,9 @@ class HuggingFaceProvider(BaseProvider):
         if self._client is not None:
             return self._client
 
-        try:
-            from huggingface_hub import InferenceClient
-        except ImportError:
-            raise ImportError(
-                "huggingface_hub not installed. Install with: pip install huggingface_hub"
-            )
+        from A.utils.deps import ensure_dependency
+        ensure_dependency("huggingface_hub")
+        from huggingface_hub import InferenceClient
 
         self._client = InferenceClient(token=self._api_token)
         return self._client
@@ -591,12 +579,9 @@ class DeepSeekProvider(BaseProvider):
         if self._client is not None:
             return self._client
 
-        try:
-            from openai import OpenAI
-        except ImportError:
-            raise ImportError(
-                "openai library not installed. Install with: pip install openai"
-            )
+        from A.utils.deps import ensure_dependency
+        ensure_dependency("openai")
+        from openai import OpenAI
 
         self._client = OpenAI(
             api_key=self._api_key,

@@ -8,6 +8,7 @@ from A.utils.expr import eval_safe, validate_safe
 from A.utils.clipboard import copy_to_clipboard, copy_file
 from A.utils.serialize import serialize_json_columns, deserialize_json_columns
 from A.utils.repl import ModuleREPL
+from A.utils.deps import ensure_dependency, get_pip_command
 
 __all__ = [
     "info",
@@ -29,4 +30,6 @@ __all__ = [
     "copy_file",
     "serialize_json_columns",
     "deserialize_json_columns",
+    "ensure_dependency",
+    "get_pip_command",
 ]
