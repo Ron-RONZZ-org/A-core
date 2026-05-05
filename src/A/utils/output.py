@@ -8,12 +8,12 @@ from rich.table import Table
 from rich.text import Text
 
 
-# Minimal styles - no bold, no highlighs by default
+# Minimal styles - dim for info, bold for emphasis/signaling
 STYLES = {
     "info": Style(dim=True),
-    "success": Style(color="green", dim=True),
-    "warning": Style(color="yellow"),
-    "error": Style(color="red"),
+    "success": Style(color="green", bold=True),
+    "warning": Style(color="yellow", bold=True),
+    "error": Style(color="red", bold=True),
     "label": Style(bold=True),
 }
 
@@ -42,7 +42,7 @@ def warning(message: str) -> None:
 
 def error(message: str) -> None:
     """Print error message (red)."""
-    console.print(f"[!] {message}", style=STYLES["error"])
+    console.print(f"[✗] {message}", style=STYLES["error"])
 
 
 def label(text: str) -> str:
