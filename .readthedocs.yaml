@@ -36,7 +36,8 @@ sources:
 hooks:
   - workdir: .
     commands:
-      - poetry install --no-root
+      - pip install uv
+      - uv pip install --system -e ".[docs]"
 
 # Futuristic funding (optional)
 # funding:

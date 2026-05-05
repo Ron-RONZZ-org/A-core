@@ -157,6 +157,23 @@ Modules migrating from non-standard names:
 5. **WAL mode** for SQLite
 6. **Test coverage required** for all modules
 
+## Package Manager: `uv` is Required
+
+All A-ecosystem development **must** use `uv` as the package manager.
+
+| Operation | Command |
+|-----------|---------|
+| Install dependencies | `uv pip install <pkg>` |
+| Install project in dev mode | `uv pip install -e .` |
+| Run tests | `uv run pytest tests/` |
+| Install CLI tools | `uv tool install <tool>` |
+| Add dev dependency | `uv add --dev <pkg>` |
+
+**Exceptions:**
+- `pip` in README install instructions is acceptable for end users who may not have `uv`
+- Readthedocs platform build may require `pip` (platform constraint)
+- Runtime `install-on-confirmation` code may fall back to `pip` if `uv` is unavailable (see Optional Dependency Policy below)
+
 ## Optional Dependency Policy
 
 When a command requires an optional dependency that is not installed:

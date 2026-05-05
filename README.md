@@ -36,7 +36,13 @@ Esperanto-native CLI framework with plugin support.
 
 ## Install
 
+Devs use `uv` (recommended). End users can use `pip`:
+
 ```bash
+# Recommended — fast, reliable
+pip install uv && uv pip install A-core
+
+# Traditional
 pip install A-core
 ```
 
@@ -87,7 +93,7 @@ service.search_advanced("query", fuzzy=True)  # Combined search
 
 **Install with fuzzy search:**
 ```bash
-pip install A-core[search]  # Adds rapidfuzz for fast fuzzy matching
+pip install 'A-core[search]'  # Adds rapidfuzz (or: uv pip install 'A-core[search]')
 ```
 
 ## Markdown Rendering
@@ -125,7 +131,7 @@ preview_html("<h1>Custom</h1>", open_browser=True)
 
 **Install:**
 ```bash
-pip install A-core  # Includes mistune + pygments
+uv pip install A-core  # or: pip install A-core
 ```
 
 ## Undo System
@@ -196,7 +202,7 @@ export_json_stream(record_generator(), Path("large.json"))
 
 **Install with encryption:**
 ```bash
-pip install A-core  # Includes cryptography
+uv pip install A-core  # or: pip install A-core (includes cryptography)
 ```
 
 ## Migration from autish
@@ -252,7 +258,7 @@ A help         # Show help
 Install plugins with pip:
 
 ```bash
-pip install A[tempo]        # Time/clock plugin
+uv pip install 'A[tempo]'        # Time/clock plugin
 pip install A-sistemo       # System management
 ```
 
