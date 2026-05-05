@@ -200,9 +200,16 @@ class CRUDService:
         return self.db.execute(sql)
 
     def get(self, uuid: str) -> dict[str, Any] | None:
-        """Get a single entry by UUID."""
+        """Get a single entry by UUID (supports 8+ hex char prefix).
+
+        Args:
+            uuid: Full UUID (36 chars) or prefix (8+ hex chars)
+
+        Returns:
+            Entry dict or None. If prefix matches multiple, returns first.
+        """
         return self.db.execute_one(
-            f"SELECT * FROM {self.table} WHERE uuid = ?", (uuid,)
+            f"SELECT * FROM {self.table} WHERE uuid LIKE ?", (f"{uuid}%",)
         )
 
     # Alias for get() - used by A.core.references
