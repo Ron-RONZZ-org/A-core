@@ -22,13 +22,41 @@ API Key Sources (in priority order):
 
 from __future__ import annotations
 
+import json
 import os
-from abc import abstractmethod
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import Protocol, Awaitable, Any
 
 from A.core import keyring as _keyring
 from A.core.paths import config_dir
+
+
+@dataclass
+class ToolCall:
+    """A tool/function call requested by the LLM.
+
+    Attributes:
+        id: Unique identifier for this tool call
+        type: Tool type (typically "function")
+        function: Dict with "name" and "arguments" (JSON string)
+    """
+    id: str
+    type: str = "function"
+    function: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LLMResponse:
+    """Response from an LLM chat call, possibly with tool calls.
+
+    Attributes:
+        content: Text content from the LLM (empty if only tool calls)
+        tool_calls: List of tool calls requested (None if text only)
+        finish_reason: Why generation stopped ("stop", "tool_calls", "length")
+    """
+    content: str = ""
+    tool_calls: list[ToolCall] | None = None
+    finish_reason: str = "stop"
 
 
 class LLMProvider(Protocol):
@@ -37,12 +65,27 @@ class LLMProvider(Protocol):
     def generate(self, prompt: str, **kwargs: Any) -> str:
         """Generate text from prompt (synchronous).
 
+        Default implementation delegates to chat() for backward compat.
+
         Args:
             prompt: Input prompt/text
             **kwargs: Provider-specific parameters (temperature, max_tokens, etc.)
 
         Returns:
             Generated text response
+        """
+        ...
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, **kwargs: Any) -> LLMResponse:
+        """Structured chat with optional tool calling.
+
+        Args:
+            messages: List of message dicts with "role" and "content"
+            tools: Optional list of tool definitions (OpenAI tool format)
+            **kwargs: Provider-specific parameters
+
+        Returns:
+            LLMResponse with content and/or tool_calls
         """
         ...
 
@@ -59,6 +102,13 @@ class LLMProvider(Protocol):
         ...
 
     @property
+    def supports_tools(self) -> bool:
+        """Whether this provider supports tool/function calling.
+
+        Returns:
+            True if tools parameter is supported in chat()
+        """
+        return False
     def name(self) -> str:
         """Provider name for display."""
         ...
@@ -93,6 +143,57 @@ class BaseProvider:
     def model(self) -> str:
         """Model name."""
         return self._model
+
+    def generate(self, prompt: str, **kwargs: Any) -> str:
+        """Generate text (delegates to chat() for backward compat)."""
+        return self.chat([{"role": "user", "content": prompt}], **kwargs).content
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, **kwargs: Any) -> LLMResponse:
+        """Structured chat with optional tool calling (default: prompt-injection fallback).
+
+        Subclasses that support tools should override this.
+        The default implementation injects tool schemas into the system prompt
+        and expects text-only responses.
+        """
+        prompt = self._build_chat_prompt(messages, tools)
+        text = self._call_api(prompt, **kwargs)
+        return LLMResponse(content=text)
+
+    @property
+    def supports_tools(self) -> bool:
+        """Whether this provider supports tool calling."""
+        return False
+
+    def _build_chat_prompt(self, messages: list[dict], tools: list[dict] | None = None) -> str:
+        """Convert chat messages + tools to a single prompt string.
+
+        This is the fallback for providers that don't support native tool calling.
+        """
+        parts = []
+        if tools:
+            parts.append("Available tools:")
+            for t in tools:
+                name = t.get("function", {}).get("name", "?")
+                desc = t.get("function", {}).get("description", "")
+                parts.append(f"- {name}: {desc}")
+            parts.append("")
+            parts.append("To call a tool, respond with: TOOL_CALL: tool_name | arg1=val1 | arg2=val2")
+            parts.append("After receiving the tool result, continue with your response.")
+            parts.append("")
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "system":
+                parts.insert(0, content)
+            elif role == "tool":
+                parts.append(f"[Tool result: {content}]")
+            else:
+                parts.append(f"{role}: {content}")
+        return "\n".join(parts)
+
+    def _call_api(self, prompt: str, **kwargs: Any) -> str:
+        """Make the actual API call. Subclasses must override this."""
+        raise NotImplementedError
 
     def _get_common_params(self) -> dict[str, Any]:
         """Get common generation parameters."""
@@ -181,6 +282,51 @@ class OpenAIProvider(BaseProvider):
             **params,
         )
         return response.choices[0].message.content or ""
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, **kwargs: Any) -> LLMResponse:
+        """Chat with tool calling support.
+
+        Args:
+            messages: Chat messages with role/content
+            tools: OpenAI-compatible tool definitions
+            **kwargs: Override parameters
+
+        Returns:
+            LLMResponse with content and/or tool_calls
+        """
+        params = self._get_common_params()
+        params.update(kwargs)
+        params.pop("model", None)  # model is passed separately
+
+        client = self._get_client()
+        kwargs_inner: dict[str, Any] = {"model": self._model, "messages": messages}
+        if tools:
+            kwargs_inner["tools"] = tools
+        kwargs_inner.update(params)
+
+        response = client.chat.completions.create(**kwargs_inner)
+        msg = response.choices[0].message
+
+        tool_calls = None
+        if msg.tool_calls:
+            tool_calls = [
+                ToolCall(
+                    id=tc.id,
+                    type="function",
+                    function={"name": tc.function.name, "arguments": tc.function.arguments},
+                )
+                for tc in msg.tool_calls
+            ]
+
+        return LLMResponse(
+            content=msg.content or "",
+            tool_calls=tool_calls,
+            finish_reason=response.choices[0].finish_reason or "stop",
+        )
+
+    @property
+    def supports_tools(self) -> bool:
+        return True
 
     async def generate_async(self, prompt: str, **kwargs: Any) -> str:
         """Generate text using OpenAI API (async).
@@ -479,6 +625,51 @@ class DeepSeekProvider(BaseProvider):
             max_tokens=params["max_tokens"],
         )
         return response.choices[0].message.content or ""
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, **kwargs: Any) -> LLMResponse:
+        """Chat with tool calling support (OpenAI-compatible API).
+
+        Args:
+            messages: Chat messages
+            tools: Tool definitions
+            **kwargs: Override parameters
+
+        Returns:
+            LLMResponse
+        """
+        params = self._get_common_params()
+        params.update(kwargs)
+
+        client = self._get_client()
+        kwargs_inner: dict[str, Any] = {"model": params["model"], "messages": messages}
+        if tools:
+            kwargs_inner["tools"] = tools
+        kwargs_inner["temperature"] = params["temperature"]
+        kwargs_inner["max_tokens"] = params["max_tokens"]
+
+        response = client.chat.completions.create(**kwargs_inner)
+        msg = response.choices[0].message
+
+        tool_calls = None
+        if msg.tool_calls:
+            tool_calls = [
+                ToolCall(
+                    id=tc.id,
+                    type="function",
+                    function={"name": tc.function.name, "arguments": tc.function.arguments},
+                )
+                for tc in msg.tool_calls
+            ]
+
+        return LLMResponse(
+            content=msg.content or "",
+            tool_calls=tool_calls,
+            finish_reason=response.choices[0].finish_reason or "stop",
+        )
+
+    @property
+    def supports_tools(self) -> bool:
+        return True
 
     async def generate_async(self, prompt: str, **kwargs: Any) -> str:
         """Generate text using DeepSeek API (async).
