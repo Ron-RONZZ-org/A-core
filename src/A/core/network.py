@@ -50,15 +50,17 @@ def format_connection_error(
     """
     msg_lower = str(exc).lower()
 
-    # DNS resolution failure
+    # DNS resolution failure — specific hostname not found, not
+    # necessarily a user internet problem (server may be down,
+    # hostname may be wrong, DNS record may not exist).
     if isinstance(exc, socket.gaierror) or "name or service not known" in msg_lower:
         return tr_multi(
             f"Ne eblas rezolvi la gastigantan nomon {host}.\n"
-            f"Kontrolu vian interretan konekton kaj la DNS-agordojn.",
+            f"Kontrolu ĉu la nomo estas ĝusta, aŭ ĉu la servilo funkcias.",
             f"Could not resolve hostname {host}.\n"
-            f"Check your internet connection and DNS settings.",
+            f"Verify the hostname is correct and the server is running.",
             f"Impossible de résoudre le nom d'hôte {host}.\n"
-            f"Vérifiez votre connexion internet et les paramètres DNS.",
+            f"Vérifiez que le nom est correct et que le serveur fonctionne.",
         )
 
     # Connection refused (port not listening, server down)
