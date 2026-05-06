@@ -53,10 +53,13 @@ class LLMResponse:
         content: Text content from the LLM (empty if only tool calls)
         tool_calls: List of tool calls requested (None if text only)
         finish_reason: Why generation stopped ("stop", "tool_calls", "length")
+        reasoning_content: Reasoning/thinking tokens (DeepSeek-specific). Must be
+            echoed back in subsequent requests when using thinking mode.
     """
     content: str = ""
     tool_calls: list[ToolCall] | None = None
     finish_reason: str = "stop"
+    reasoning_content: str | None = None
 
 
 class LLMProvider(Protocol):
@@ -315,10 +318,13 @@ class OpenAIProvider(BaseProvider):
                 for tc in msg.tool_calls
             ]
 
+        reasoning = getattr(msg, "reasoning_content", None)
+
         return LLMResponse(
             content=msg.content or "",
             tool_calls=tool_calls,
             finish_reason=response.choices[0].finish_reason or "stop",
+            reasoning_content=reasoning,
         )
 
     @property
@@ -646,10 +652,13 @@ class DeepSeekProvider(BaseProvider):
                 for tc in msg.tool_calls
             ]
 
+        reasoning = getattr(msg, "reasoning_content", None)
+
         return LLMResponse(
             content=msg.content or "",
             tool_calls=tool_calls,
             finish_reason=response.choices[0].finish_reason or "stop",
+            reasoning_content=reasoning,
         )
 
     @property
