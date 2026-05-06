@@ -160,12 +160,11 @@ class ModuleREPL(cmd.Cmd):
                 error(f"  {name}: {e}")
 
         # Re-import the main entry module and rebuild the app
+        # importlib.import_module already returns the deepest module —
+        # no need to traverse submodule hierarchy manually.
         try:
             fresh = importlib.import_module(mod_name)
-            obj = fresh
-            for attr in mod_name.split(".")[1:]:
-                obj = getattr(obj, attr)
-            new_app = getattr(obj, "app")
+            new_app = getattr(fresh, "app")
             self.module_app = new_app
             success("Reloaded. All A-* modules refreshed.")
         except Exception as e:
