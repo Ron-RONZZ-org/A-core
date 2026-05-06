@@ -473,12 +473,19 @@ def repl(
         ))
         raise typer.Exit(1)
 
-    # Derive the module path from the entry point (not app.__module__,
-    # which points to typer.main — the Typer class module).
+    # Derive the module path and attribute name from the entry point
+    # (not app.__module__, which points to typer.main — the Typer class
+    # module). Entry point value format: "module:attr" e.g. "A_lien.cli:retposto"
     ep = _PLUGIN_ENTRY_POINTS[module_name]
     mod_path = ep.value.split(":", 1)[0]
+    mod_attr = ep.value.split(":", 1)[1] if ":" in ep.value else "app"
 
-    ModuleREPL(module_name=module_name, module_app=app, module_path=mod_path).cmdloop()
+    ModuleREPL(
+        module_name=module_name,
+        module_app=app,
+        module_path=mod_path,
+        module_attr=mod_attr,
+    ).cmdloop()
 
 
 def main():

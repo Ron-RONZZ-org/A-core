@@ -43,6 +43,7 @@ class ModuleREPL(cmd.Cmd):
         module_name: str,
         module_app,
         module_path: str | None = None,
+        module_attr: str = "app",
     ) -> None:
         """Initialise the REPL.
 
@@ -53,11 +54,14 @@ class ModuleREPL(cmd.Cmd):
                 ``"A_tempo.cli"``). If ``None``, falls back to
                 ``module_app.__module__`` (which points to ``typer.main``
                 and will break ``refresh``).
+            module_attr: Attribute name on the module that holds the app
+                (e.g. ``"app"``, ``"retposto"``). Default ``"app"``.
         """
         super().__init__()
         self.module_name = module_name
         self.module_app = module_app
         self._module_path = module_path or module_app.__module__
+        self._module_attr = module_attr
         self.prompt = f"{module_name}> "
         self._hist_path: Path | None = None
         self._load_history()
@@ -180,7 +184,7 @@ class ModuleREPL(cmd.Cmd):
         # no need to traverse submodule hierarchy manually.
         try:
             fresh = importlib.import_module(mod_name)
-            new_app = getattr(fresh, "app")
+            new_app = getattr(fresh, self._module_attr)
             self.module_app = new_app
             success("Reloaded. All A-* modules refreshed.")
         except Exception as e:
