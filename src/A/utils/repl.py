@@ -127,38 +127,49 @@ class ModuleREPL(cmd.Cmd):
         self.default("--help")
 
     def do_refresh(self, _arg: str) -> None:
-        """Hot-reload the module's source code without exiting the REPL.
+        """Hot-reload source code without exiting the REPL.
 
-        Uses importlib.reload() on the module and rebuilds the Typer app.
-        Sub-modules (e.g. A_xxx.data, A_xxx.service) are also reloaded.
+        Reloads all A-* modules in dependency order (core first, then plugins).
+        Sub-modules (e.g. A_xxx.data) are reloaded before their parent packages.
         """
         mod_name = self.module_app.__module__
-        parts = mod_name.split(".")
-        base_pkg = parts[0] if parts else mod_name
+        base_pkg = mod_name.split(".")[0]
 
-        # Collect sub-modules to reload (reverse order — child first)
-        to_reload = [m for m in sys.modules if m.startswith(base_pkg)]
-        info(f"Refreshing {len(to_reload)} modules from '{base_pkg}'...")
+        # Collect ALL A-* modules currently loaded
+        a_modules = {name: mod for name, mod in sys.modules.items()
+                     if mod is not None and name.startswith("A_")
+                     and hasattr(mod, "__file__") and mod.__file__ is not None}
 
-        for m in sorted(to_reload, reverse=True):
-            if m in sys.modules and sys.modules[m]:
-                try:
-                    importlib.reload(sys.modules[m])
-                except Exception as e:
-                    error(f"  {m}: {e}")
+        # Sort: by package name (deps first: A-core < A-encik < A-agento),
+        # then by module depth descending (sub-modules before parents)
+        pkg_order = {"A_core": 0, "A_encik": 1, "A_lien": 2, "A_organizi": 3,
+                     "A_vorto": 4, "A_tempo": 5, "A_sistemo": 6, "A_medio": 7,
+                     "A_sekurkopio": 8}
+        def sort_key(name):
+            pkg = name.split(".")[0]
+            depth = name.count(".")
+            return (pkg_order.get(pkg, 99), -depth, name)
 
-        # Re-import the main module and get fresh app
+        sorted_modules = sorted(a_modules.keys(), key=sort_key)
+        info(f"Refreshing {len(sorted_modules)} modules...")
+
+        for name in sorted_modules:
+            try:
+                importlib.reload(sys.modules[name])
+            except Exception as e:
+                error(f"  {name}: {e}")
+
+        # Re-import the main entry module and rebuild the app
         try:
             fresh = importlib.import_module(mod_name)
-            # Walk to the final attribute (e.g. A_agento.cli:app)
             obj = fresh
             for attr in mod_name.split(".")[1:]:
                 obj = getattr(obj, attr)
             new_app = getattr(obj, "app")
             self.module_app = new_app
-            success("Reloaded. New commands available.")
+            success("Reloaded. All A-* modules refreshed.")
         except Exception as e:
-            error(f"Failed to reload: {e}")
+            error(f"Failed to reload main app: {e}")
 
     def do_shell(self, arg: str) -> None:
         """Run a shell command. Usage: ``!<command>`` or ``shell <command>``."""
