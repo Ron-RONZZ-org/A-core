@@ -14,10 +14,12 @@ from __future__ import annotations
 import cmd
 import os
 import shlex
+import sys
+import importlib
 from pathlib import Path
 
 from A.core.paths import state_dir
-from A.utils.output import info, error, console
+from A.utils.output import info, success, error, console
 
 HISTORY_LENGTH = 1000
 
@@ -123,6 +125,40 @@ class ModuleREPL(cmd.Cmd):
     def do_help(self, _arg: str) -> None:
         """Show the module's help (same as ``--help``)."""
         self.default("--help")
+
+    def do_refresh(self, _arg: str) -> None:
+        """Hot-reload the module's source code without exiting the REPL.
+
+        Uses importlib.reload() on the module and rebuilds the Typer app.
+        Sub-modules (e.g. A_xxx.data, A_xxx.service) are also reloaded.
+        """
+        mod_name = self.module_app.__module__
+        parts = mod_name.split(".")
+        base_pkg = parts[0] if parts else mod_name
+
+        # Collect sub-modules to reload (reverse order — child first)
+        to_reload = [m for m in sys.modules if m.startswith(base_pkg)]
+        info(f"Refreshing {len(to_reload)} modules from '{base_pkg}'...")
+
+        for m in sorted(to_reload, reverse=True):
+            if m in sys.modules and sys.modules[m]:
+                try:
+                    importlib.reload(sys.modules[m])
+                except Exception as e:
+                    error(f"  {m}: {e}")
+
+        # Re-import the main module and get fresh app
+        try:
+            fresh = importlib.import_module(mod_name)
+            # Walk to the final attribute (e.g. A_agento.cli:app)
+            obj = fresh
+            for attr in mod_name.split(".")[1:]:
+                obj = getattr(obj, attr)
+            new_app = getattr(obj, "app")
+            self.module_app = new_app
+            success("Reloaded. New commands available.")
+        except Exception as e:
+            error(f"Failed to reload: {e}")
 
     def do_shell(self, arg: str) -> None:
         """Run a shell command. Usage: ``!<command>`` or ``shell <command>``."""
