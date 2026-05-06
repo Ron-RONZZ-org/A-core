@@ -11,7 +11,8 @@ from A.core.export import export_json, export_toml, export_json_stream, export_t
 from A.core.import_ import import_json, import_toml, import_auto, import_stream
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
-from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider, LLMProvider, ToolCall, LLMResponse
+from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider
+from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
 
