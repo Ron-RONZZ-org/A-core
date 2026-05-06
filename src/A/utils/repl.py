@@ -38,10 +38,26 @@ class ModuleREPL(cmd.Cmd):
         "  !<cmd>  run a shell command"
     )
 
-    def __init__(self, module_name: str, module_app) -> None:
+    def __init__(
+        self,
+        module_name: str,
+        module_app,
+        module_path: str | None = None,
+    ) -> None:
+        """Initialise the REPL.
+
+        Args:
+            module_name: Short display name (e.g. ``"tempo"``).
+            module_app: The ``typer.Typer`` instance to dispatch to.
+            module_path: Fully qualified module path of the app (e.g.
+                ``"A_tempo.cli"``). If ``None``, falls back to
+                ``module_app.__module__`` (which points to ``typer.main``
+                and will break ``refresh``).
+        """
         super().__init__()
         self.module_name = module_name
         self.module_app = module_app
+        self._module_path = module_path or module_app.__module__
         self.prompt = f"{module_name}> "
         self._hist_path: Path | None = None
         self._load_history()
@@ -132,7 +148,7 @@ class ModuleREPL(cmd.Cmd):
         Reloads all A-* modules in dependency order (core first, then plugins).
         Sub-modules (e.g. A_xxx.data) are reloaded before their parent packages.
         """
-        mod_name = self.module_app.__module__
+        mod_name = self._module_path
         base_pkg = mod_name.split(".")[0]
 
         # Collect ALL A-* modules currently loaded
