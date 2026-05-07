@@ -130,24 +130,42 @@ def test_select_row_formatter_called(mock_prompt):
 # ── confirm_action ───────────────────────────────────────────────────────────
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_yes(mock_confirm):
+def test_confirm_yes():
     """confirm_action returns True when confirmed."""
-    mock_confirm.return_value = True
-    assert confirm_action("Proceed?") is True
-    mock_confirm.assert_called_with("Proceed?", default=False)
+    from unittest.mock import patch as _p
+    with _p("builtins.input", return_value="y"), \
+         _p("A.core.i18n.get_current_language", return_value="en"):
+        assert confirm_action("Proceed?") is True
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_no(mock_confirm):
+def test_confirm_no():
     """confirm_action returns False when declined."""
-    mock_confirm.return_value = False
-    assert confirm_action("Proceed?") is False
+    from unittest.mock import patch as _p
+    with _p("builtins.input", return_value="n"), \
+         _p("A.core.i18n.get_current_language", return_value="en"):
+        assert confirm_action("Proceed?") is False
 
 
-@patch("A.utils.interactive.typer.confirm")
-def test_confirm_default(mock_confirm):
-    """Default value is passed to typer.confirm."""
-    mock_confirm.return_value = True
-    confirm_action("Proceed?", default=True)
-    mock_confirm.assert_called_with("Proceed?", default=True)
+def test_confirm_default():
+    """Default value is respected."""
+    from unittest.mock import patch as _p
+    with _p("builtins.input", return_value=""), \
+         _p("A.core.i18n.get_current_language", return_value="en"):
+        assert confirm_action("Proceed?", default=True) is True
+        assert confirm_action("Proceed?", default=False) is False
+
+
+def test_confirm_esperanto():
+    """confirm_action accepts J (Jes) in Esperanto locale."""
+    from unittest.mock import patch as _p
+    with _p("builtins.input", return_value="j"), \
+         _p("A.core.i18n.get_current_language", return_value="eo"):
+        assert confirm_action("Proceed?") is True
+
+
+def test_confirm_french():
+    """confirm_action accepts O (Oui) in French locale."""
+    from unittest.mock import patch as _p
+    with _p("builtins.input", return_value="o"), \
+         _p("A.core.i18n.get_current_language", return_value="fr"):
+        assert confirm_action("Proceed?") is True

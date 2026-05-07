@@ -94,7 +94,10 @@ def confirm_action(
     *,
     default: bool = False,
 ) -> bool:
-    """Display a yes/no confirmation prompt.
+    """Display a locale-aware yes/no confirmation prompt.
+
+    Shows [J/n] in Esperanto, [Y/n] in English, [O/n] in French.
+    Accepts both the full word (jes/yes/oui) and single letter (j/y/o).
 
     Parameters
     ----------
@@ -107,4 +110,31 @@ def confirm_action(
     -------
     ``True`` if confirmed, ``False`` otherwise.
     """
-    return typer.confirm(message, default=default)
+    from A.core.i18n import get_current_language
+
+    lang = get_current_language()
+
+    # Locale-specific prompt and accepted inputs
+    if lang == "eo":
+        prompt_abbr = "[J/n]"
+        yes_words = {"j", "jes"}
+        no_words = {"n", "ne"}
+    elif lang == "fr":
+        prompt_abbr = "[O/n]"
+        yes_words = {"o", "oui"}
+        no_words = {"n", "non"}
+    else:
+        prompt_abbr = "[Y/n]"
+        yes_words = {"y", "yes"}
+        no_words = {"n", "no"}
+
+    default_str = prompt_abbr[1] if default else prompt_abbr[3]  # J or n / Y or n / O or n
+
+    while True:
+        raw = input(f"{message} {prompt_abbr}: ").strip().lower()
+        if not raw:
+            return default
+        if raw in yes_words:
+            return True
+        if raw in no_words:
+            return False
