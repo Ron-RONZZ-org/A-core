@@ -215,7 +215,12 @@ class OpenAICompatibleProvider(BaseProvider):
         kwargs_inner["temperature"] = params["temperature"]
         kwargs_inner["max_tokens"] = params["max_tokens"]
 
-        response = client.chat.completions.create(**kwargs_inner)
+        try:
+            response = client.chat.completions.create(**kwargs_inner)
+        except Exception as e:
+            raise RuntimeError(
+                f"{self._name} API call failed: {e}"
+            ) from e
         msg = response.choices[0].message
 
         tool_calls = None
