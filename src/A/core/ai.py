@@ -95,8 +95,9 @@ def get_api_key(provider: str = "openai", profile: str = "default") -> str | Non
 def get_provider(provider_type: str, **kwargs: Any) -> LLMProvider:
     """Factory: create an LLM provider by type.
 
-    Provider must be explicitly specified. Default fallback is managed
-    by A-agento's A_agento.provider_state module.
+    Provider type is normalized to lowercase for consistent config
+    lookups. Provider must be explicitly specified. Default fallback
+    is managed by A-agento's A_agento.provider_state module.
 
     Args:
         provider_type: "huggingface", "deepseek", "openai", "ollama",
@@ -109,6 +110,7 @@ def get_provider(provider_type: str, **kwargs: Any) -> LLMProvider:
     Raises:
         ValueError: If provider type is unknown
     """
+    provider_type = provider_type.lower()
     if provider_type == "ollama":
         return OllamaProvider(**kwargs)
 
