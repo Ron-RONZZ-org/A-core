@@ -260,15 +260,20 @@ class OpenAICompatibleProvider(BaseProvider):
 def _resolve_api_key(provider_type: str) -> str | None:
     """Resolve API key for a provider type from env/.env/keyring.
 
+    Provider name is normalized to lowercase. Keyring lookups use
+    the same naming convention as A.core.ai.save_api_key/get_api_key
+    (``A-core/{profile}/{provider}_key``).
+
     Args:
         provider_type: Provider name ("openai", "deepseek", "huggingface")
 
     Returns:
         API key string or None
     """
-    from A.core import keyring as _kr
     from A.core.paths import config_dir as _cd
     import os
+
+    pt = provider_type.lower()
 
     # Map provider type to env var name
     env_map = {
@@ -276,14 +281,9 @@ def _resolve_api_key(provider_type: str) -> str | None:
         "deepseek": "DEEPSEEK_API_KEY",
         "huggingface": "HF_TOKEN",
     }
-    keyring_map = {
-        "openai": ("A-core/openai_key", "api_key"),
-        "deepseek": ("A-core/deepseek", "api_key"),
-        "huggingface": ("A-core/huggingface", "token"),
-    }
 
     # 1. Environment variable
-    env_var = env_map.get(provider_type)
+    env_var = env_map.get(pt)
     if env_var:
         key = os.environ.get(env_var)
         if key:
@@ -295,17 +295,15 @@ def _resolve_api_key(provider_type: str) -> str | None:
         try:
             for line in open(env_file):
                 line = line.strip()
-                if line.startswith(env_var + "=") if env_var else False:
+                if env_var and line.startswith(env_var + "="):
                     return line.split("=", 1)[1]
         except Exception:
             pass
 
-    # 3. Keyring
-    kr_config = keyring_map.get(provider_type)
-    if kr_config:
-        return _kr.get_password(kr_config[0], kr_config[1])
-
-    return None
+    # 3. Keyring (use same naming convention as save_api_key/get_api_key)
+    from A.core.ai import get_api_key
+    # Pass original case so get_api_key can attempt migration from old entries
+    return get_api_key(provider=provider_type)
 
 
 # ── Ollama Provider ─────────────────────────────────────────────────────────

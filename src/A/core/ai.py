@@ -40,6 +40,8 @@ def save_api_key(api_key: str, provider: str = "openai",
                  profile: str = "default") -> bool:
     """Save API key to system keyring.
 
+    Provider name is normalized to lowercase for consistent keyring naming.
+
     Args:
         api_key: API key
         provider: Provider name ("openai", "huggingface", "deepseek")
@@ -48,13 +50,17 @@ def save_api_key(api_key: str, provider: str = "openai",
     Returns:
         True if saved successfully
     """
-    service = f"A-core/{profile}/{provider}_key"
-    key_name = "api_key" if provider != "huggingface" else "token"
+    pt = provider.lower()
+    service = f"A-core/{profile}/{pt}_key"
+    key_name = "api_key" if pt != "huggingface" else "token"
     return _keyring.set_password(service, key_name, api_key)
 
 
 def get_api_key(provider: str = "openai", profile: str = "default") -> str | None:
     """Get API key from system keyring.
+
+    Provider name is normalized to lowercase. Falls back to the original
+    case for pre-normalization entries and migrates them to lowercase.
 
     Args:
         provider: Provider name ("openai", "huggingface", "deepseek")
@@ -63,9 +69,22 @@ def get_api_key(provider: str = "openai", profile: str = "default") -> str | Non
     Returns:
         API key or None if not found
     """
-    service = f"A-core/{profile}/{provider}_key"
-    key_name = "api_key" if provider != "huggingface" else "token"
-    return _keyring.get_password(service, key_name)
+    pt = provider.lower()
+    service = f"A-core/{profile}/{pt}_key"
+    key_name = "api_key" if pt != "huggingface" else "token"
+    key = _keyring.get_password(service, key_name)
+    if key:
+        return key
+    # Fallback: if provider had uppercase chars, try original case
+    # and migrate to lowercase for future lookups.
+    if provider != pt:
+        old_service = f"A-core/{profile}/{provider}_key"
+        key = _keyring.get_password(old_service, key_name)
+        if key:
+            _keyring.set_password(service, key_name, key)
+            _keyring.delete_password(old_service, key_name)
+            return key
+    return None
 
 
 # ============================================================================
