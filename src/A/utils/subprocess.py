@@ -38,7 +38,7 @@ def run(
             list(args),
             capture_output=True,
             timeout=timeout,
-            input=input.encode() if input else None,
+            input=input if input else None,
             text=True,
         )
         return SubprocessResult(
