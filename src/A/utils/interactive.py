@@ -51,9 +51,9 @@ def select_candidate(
     if not candidates:
         return None
 
-    # Build table
-    table = Table(show_header=True, header_style="dim", box=None)
-    table.add_column("#", style="dim", width=3)
+    # Build table (no per-column colors — greyscale-accessible)
+    table = Table(show_header=True, box=None)
+    table.add_column("#", width=3)
     for col in columns:
         table.add_column(
             col.get("header", ""),

@@ -254,10 +254,10 @@ def modulo_ls(
             ))
             return
 
-        table = Table(show_header=True, header_style="dim", box=None)
-        table.add_column("#", style="dim", width=3)
+        table = Table(show_header=True, box=None)
+        table.add_column("#", width=3)
         table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
-        table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"), style="dim")
+        table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"))
 
         for i, m in enumerate(modules, 1):
             table.add_row(str(i), m.get("display_name", m["name"]), m.get("pip", ""))
@@ -277,14 +277,14 @@ def modulo_ls(
     installed_names = {m["name"] for m in get_installed_modules()}
     all_modules = sorted(data.get("modules", []), key=lambda m: m.get("name", ""))
 
-    table = Table(show_header=True, header_style="dim", box=None)
-    table.add_column("#", style="dim", width=3)
+    table = Table(show_header=True, box=None)
+    table.add_column("#", width=3)
     table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
     table.add_column(
-        tr_multi("Priskribo", "Description", "Description"), style="dim"
+        tr_multi("Priskribo", "Description", "Description")
     )
     table.add_column(
-        tr_multi("Stato", "Status", "\u00c9tat"), style="dim", width=12
+        tr_multi("Stato", "Status", "\u00c9tat"), width=12
     )
 
     for i, m in enumerate(all_modules, 1):
