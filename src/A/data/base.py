@@ -56,6 +56,10 @@ class SQLiteDB:
             self._conn = sqlite3.connect(self.path)
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
+            # Keep WAL small: auto-checkpoint every 100 pages (~400KB)
+            # instead of the default 1000 pages (~4MB). Frequent small
+            # checkpoints avoid long stalls during read operations.
+            self._conn.execute("PRAGMA wal_autocheckpoint=100")
             self._conn.row_factory = sqlite3.Row
         return self._conn
 

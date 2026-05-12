@@ -63,7 +63,9 @@ def copy_to_clipboard(text: str) -> bool:
     """
     cmd = _get_native_command()
     if cmd is not None:
-        result = run(*cmd, input=text)
+        # Short timeout: if clipboard command hangs (e.g. no X display),
+        # fail fast rather than blocking for the default 30s.
+        result = run(*cmd, input=text, timeout=2.0)
         if result.success:
             return True
 
