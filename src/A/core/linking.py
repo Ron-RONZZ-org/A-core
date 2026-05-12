@@ -52,9 +52,17 @@ def sync_links_for_entry(
     pmap = prefix_map or PREFIX_MAP
     targets: set[tuple[str, str]] = set()  # (target_type, target_uuid)
 
-    # Collect explicit links (intra-module)
+    # Collect explicit links (intra-module or cross-module with prefix)
     for target_uuid in (explicit_links or []):
-        if target_uuid and target_uuid != uuid:
+        if not target_uuid or target_uuid == uuid:
+            continue
+        tu = target_uuid.lower()
+        # Check for cross-module prefix (ec#uuid, vt#uuid)
+        if tu.startswith("ec#"):
+            targets.add(("encik", target_uuid[3:]))
+        elif tu.startswith("vt#"):
+            targets.add(("vorto", target_uuid[3:]))
+        else:
             targets.add((source_type, target_uuid))
 
     # Collect inline refs from text fields (may be cross-module)
