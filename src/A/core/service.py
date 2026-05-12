@@ -135,6 +135,46 @@ class CRUDService:
             f"ON {self._trash_table}(forigita_je)"
         )
 
+        # Sync columns: ensure trash table has all columns from main table.
+        # sqlite_master is NOT updated by ALTER TABLE, so _ensure_trash_table
+        # may create the trash table without columns added via migration.
+        # Use PRAGMA table_info to detect and fix column drift.
+        main_cols: dict[str, dict] = {}
+        for row in self.db.execute(f"PRAGMA table_info({self.table})"):
+            if isinstance(row, dict):
+                main_cols[row["name"]] = row
+            else:
+                main_cols[row[1]] = {
+                    "type": row[2] if len(row) > 2 else "TEXT",
+                    "notnull": row[3] if len(row) > 3 else 0,
+                    "dflt_value": row[4] if len(row) > 4 else None,
+                }
+
+        trash_col_names: set[str] = set()
+        for row in self.db.execute(f"PRAGMA table_info({self._trash_table})"):
+            if isinstance(row, dict):
+                trash_col_names.add(row["name"])
+            else:
+                trash_col_names.add(row[1])
+
+        # Columns from main table missing in trash (forigita_je is trash-only)
+        missing = set(main_cols.keys()) - trash_col_names - {"forigita_je"}
+        for col_name in missing:
+            info = main_cols[col_name]
+            col_type = info.get("type", "TEXT") if isinstance(info, dict) else "TEXT"
+            notnull = info.get("notnull", 0) if isinstance(info, dict) else 0
+            default = info.get("dflt_value") if isinstance(info, dict) else None
+
+            parts = [col_name, col_type]
+            if notnull:
+                parts.append("NOT NULL")
+            if default is not None:
+                parts.append(f"DEFAULT {default}")
+            col_def = " ".join(parts)
+            self.db.execute(
+                f"ALTER TABLE {self._trash_table} ADD COLUMN {col_def}"
+            )
+
     # --- FTS5 Methods ---
 
     def _ensure_fts(self) -> None:
