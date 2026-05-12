@@ -8,7 +8,7 @@ from A.core.service import CRUDService, create_service
 from A.core.undo import UndoManager, UndoOperation, create_undo_operation
 from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links
 from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
-from A.core.ai import get_provider, save_api_key, get_api_key, set_default_provider, get_default_provider
+from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.registry import fetch_registry, search_registry, get_module_info, get_installed_modules
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.utils import info, success, warning, error, run, copy_to_clipboard, copy_file, serialize_json_columns, deserialize_json_columns
@@ -76,8 +76,6 @@ __all__ = [
     "get_provider",
     "save_api_key",
     "get_api_key",
-    "set_default_provider",
-    "get_default_provider",
     "LLMProvider",
     "ToolCall",
     "LLMResponse",
