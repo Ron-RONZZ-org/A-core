@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -109,9 +110,20 @@ class CRUDService:
         if not schema_sql or not schema_sql["sql"]:
             return
 
+        schema = schema_sql["sql"]
+
+        # Some modules add forigita_je to the main table via migration.
+        # Strip it from the source schema to avoid duplicate column when
+        # we re-add it below with a DEFAULT TIMESTAMP.
+        schema = re.sub(
+            r",\s*forigita_je\s+\w+(?:\s+DEFAULT\s+\S+)?\s*\)",
+            ")",
+            schema,
+        )
+
         # Create trash table with additional forigita_je column
         # Replace closing paren with , forigita_je timestamp)
-        trash_sql = schema_sql["sql"].replace(
+        trash_sql = schema.replace(
             ")", f", forigita_je TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         ).replace(f"CREATE TABLE {self.table}", f"CREATE TABLE IF NOT EXISTS {self._trash_table}")
 
