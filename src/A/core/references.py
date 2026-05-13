@@ -14,15 +14,15 @@ from functools import lru_cache
 from typing import Iterator
 
 # Regex patterns for reference extraction
-# Matches [label](vt#uuid) or [label](ec#uuid)
+# Matches [label](vt#uuid), [label](ec#uuid), or [label](#uuid)
 MARKDOWN_LINK_RE = re.compile(
-    r'\[([^\]]*)\]\(((?:vt#|ec#)[0-9a-f-]+)\)',
+    r'\[([^\]]*)\]\(((?:vt#|ec#|#)[0-9a-f-]+(?:\s*,\s*[^)]*)?)\)',
     re.IGNORECASE
 )
 
-# Matches plain vt#uuid or ec#uuid (not in markdown)
+# Matches plain vt#uuid, ec#uuid, or #uuid (not in markdown)
 PLAIN_REF_RE = re.compile(
-    r'\b(vt#|ec#)[0-9a-f-]+',
+    r'\b(?:vt#|ec#|#)[0-9a-f-]+',
     re.IGNORECASE
 )
 
@@ -115,8 +115,15 @@ def parse_refs(text: str) -> list[Ref]:
 def _split_ref(ref: str) -> tuple[str, str] | tuple[None, None]:
     """Split a ref string into type and uuid.
     
+    Accepts:
+    - ``vt#uuid`` → (``"vt"``, *uuid*)
+    - ``ec#uuid`` → (``"ec"``, *uuid*)
+    - ``#uuid`` → (``"ec"``, *uuid*)  -- bare fragment assumed encik
+    - ``#uuid, prop`` → (``"ec"``, *uuid*)  -- strips trailing property
+    
     Args:
-        ref: String like 'vt#uuid' or 'ec#uuid'
+        ref: String like ``'vt#uuid'``, ``'ec#uuid'``, ``'#uuid'``,
+             or ``'#uuid, wdt:P17'``
         
     Returns:
         Tuple of (type, uuid) or (None, None)
@@ -125,8 +132,16 @@ def _split_ref(ref: str) -> tuple[str, str] | tuple[None, None]:
     
     if ref.startswith("vt#"):
         uuid = ref[3:].strip()
+        ref_type = "vt"
     elif ref.startswith("ec#"):
         uuid = ref[3:].strip()
+        ref_type = "ec"
+    elif ref.startswith("#"):
+        # Bare #uuid — assume ec (encik) reference
+        # Strip trailing comma and property info: "#uuid, wdt:P17" → "#uuid"
+        hash_part = ref[1:].strip()
+        uuid = hash_part.split(",")[0].strip()
+        ref_type = "ec"
     else:
         return None, None
     
@@ -134,7 +149,6 @@ def _split_ref(ref: str) -> tuple[str, str] | tuple[None, None]:
     if not UUID_RE.match(uuid):
         return None, None
     
-    ref_type = ref.split("#")[0]
     return ref_type, uuid
 
 
@@ -204,12 +218,15 @@ def _resolve_encik_ref(uuid: str) -> ResolvedRef:
 
         if entry:
             resolved_uuid = entry.get("uuid", uuid)
+            # Use first terminologio value as display title
+            term = entry.get("terminologio") or {}
+            display = next(iter(term.values()), entry.get("uuid", "")[:8])
             return ResolvedRef(
                 ref_type="ec",
                 uuid=resolved_uuid,
-                label=entry.get("titolo", ""),
+                label=str(display),
                 exists=True,
-                title=entry.get("titolo", ""),
+                title=str(display),
                 data=entry
             )
     except ImportError:
