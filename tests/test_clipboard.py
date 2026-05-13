@@ -26,7 +26,7 @@ class TestCopyToClipboard:
         result = copy_to_clipboard("test text")
 
         assert result is True
-        mock_run.assert_called_once_with("pbcopy", input="test text")
+        mock_run.assert_called_once_with("pbcopy", input="test text", timeout=2.0)
 
     @patch("A.utils.clipboard._get_native_command")
     @patch("A.utils.clipboard.run")

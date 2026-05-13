@@ -96,6 +96,11 @@ def _register_migrations() -> None:
             warning(f"failed to register migration for {module}: {e}")
 
 
+# ── Uzanto Sub-App ──────────────────────────────────────────────────────────
+
+from A.core.uzanto_cli import app as uzanto_app  # noqa: E402
+app.add_typer(uzanto_app, name="uzanto")
+
 # ── Migration Sub-App ───────────────────────────────────────────────────────
 
 migri_app = typer.Typer(
