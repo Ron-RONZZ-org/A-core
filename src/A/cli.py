@@ -4,6 +4,7 @@ from typing import Callable
 
 import typer
 from rich.table import Table
+from rich.box import SIMPLE as BOX_SIMPLE
 from rich.panel import Panel
 
 from A import tr, tr_multi
@@ -259,7 +260,7 @@ def modulo_ls(
             ))
             return
 
-        table = Table(show_header=True, box=None)
+        table = Table(show_header=True, box=BOX_SIMPLE)
         table.add_column("#", width=3)
         table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
         table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"))
@@ -282,7 +283,7 @@ def modulo_ls(
     installed_names = {m["name"] for m in get_installed_modules()}
     all_modules = sorted(data.get("modules", []), key=lambda m: m.get("name", ""))
 
-    table = Table(show_header=True, box=None)
+    table = Table(show_header=True, box=BOX_SIMPLE)
     table.add_column("#", width=3)
     table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
     table.add_column(

@@ -11,6 +11,7 @@ from typing import Any, Callable, TypeVar
 
 import typer
 from rich.table import Table
+from rich.box import SIMPLE as BOX_SIMPLE
 
 from A import tr_multi
 from A.utils.output import info, console
@@ -52,7 +53,7 @@ def select_candidate(
         return None
 
     # Build table (no per-column colors — greyscale-accessible)
-    table = Table(show_header=True, box=None)
+    table = Table(show_header=True, box=BOX_SIMPLE)
     table.add_column("#", width=3)
     for col in columns:
         table.add_column(

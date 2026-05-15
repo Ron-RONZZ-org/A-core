@@ -5,6 +5,7 @@ from typing import Any
 from rich.console import Console
 from rich.style import Style
 from rich.table import Table
+from rich.box import SIMPLE as BOX_SIMPLE
 from rich.text import Text
 
 
@@ -83,7 +84,7 @@ def print_table(
         info("Neniuj rezultoj.")
         return
 
-    table = Table(title=title, show_header=True, header_style="bold")
+    table = Table(title=title, show_header=True, header_style="bold", box=BOX_SIMPLE)
 
     for col in columns:
         header = col.get("header", "")

@@ -15,6 +15,7 @@ from typing import Optional
 
 import typer
 from rich.table import Table
+from rich.box import SIMPLE as BOX_SIMPLE
 
 from A import tr, tr_multi
 from A.console import console
@@ -60,7 +61,7 @@ def vidi() -> None:
     """View current user profile configuration."""
     cfg = load_config()
 
-    table = Table(show_header=False, box=None)
+    table = Table(show_header=False, box=BOX_SIMPLE)
     table.add_column(tr_multi("Kampo", "Field", "Champ"), style="bold")
     table.add_column(tr_multi("Valoro", "Value", "Valeur"))
 
