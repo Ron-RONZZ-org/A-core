@@ -82,3 +82,44 @@ def test_markdown_module_exports():
     assert callable(preview_markdown)
     assert callable(preview_html)
     assert callable(clear_cache)
+
+
+def test_render_markdown_block_math():
+    """Test KaTeX block math ($$...$$) is parsed by mistune math plugin."""
+    from A.core.markdown_parser import render_markdown
+
+    # Block math requires $$ on their own lines
+    result = render_markdown("$$\n\\sum_i u_iA_i = 0\n$$")
+    # Mistune math plugin should wrap in div.math
+    assert '<div class="math">' in result
+    assert "sum_i" in result
+
+
+def test_render_markdown_inline_math():
+    """Test KaTeX inline math ($...$) is parsed by mistune math plugin."""
+    from A.core.markdown_parser import render_markdown
+
+    result = render_markdown("Inline math $E = mc^2$ is cool")
+    # Mistune math plugin should wrap in span.math
+    assert '<span class="math">' in result
+    assert "mc^2" in result
+
+
+def test_generate_html_wrapper_includes_katex():
+    """Test HTML wrapper includes KaTeX CDN assets."""
+    from A.core.markdown_html_view import _generate_html_wrapper
+
+    html = _generate_html_wrapper("<p>Test</p>", title="Test")
+    assert "katex.min.css" in html
+    assert "katex.min.js" in html
+    assert "auto-render.min.js" in html
+    assert "renderMathInElement" in html
+
+
+def test_cache_key_includes_version():
+    """Test cache key includes version prefix."""
+    from A.core.markdown_html_view import CACHE_VERSION, _get_cache_key
+
+    key = _get_cache_key("test content")
+    assert key.startswith(f"v{CACHE_VERSION}_")
+    assert len(key) > len(f"v{CACHE_VERSION}_")  # Has hash suffix

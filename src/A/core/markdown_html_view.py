@@ -18,6 +18,32 @@ if TYPE_CHECKING:
 # Cache directory for rendered HTML
 _html_cache_dir: Path | None = None
 
+# Cache version — bump when HTML template changes (e.g. new CDN assets)
+CACHE_VERSION = 2
+
+# KaTeX CDN version — pinned for reproducibility (matches autish-legacy)
+KATEX_VERSION = "0.16.11"
+
+# KaTeX CDN assets for HTML templates (link + script tags for <head>)
+KATEX_HTML = f"""<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.css">
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.js">
+</script>
+<script defer
+  src="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {{
+    delimiters: [
+      {{left: '$$', right: '$$', display: true}},
+      {{left: '$', right: '$', display: false}},
+      {{left: '\\\\[', right: '\\\\]', display: true}},
+      {{left: '\\\\(', right: '\\\\)', display: false}}
+    ],
+    throwOnError: false,
+    strict: 'ignore'
+  }});">
+</script>"""
+
 
 def get_cache_dir() -> Path:
     """Get or create the HTML cache directory.
@@ -49,6 +75,7 @@ def _generate_html_wrapper(content: str, title: str = "Preview") -> str:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
+    {KATEX_HTML}
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -86,13 +113,16 @@ def _generate_html_wrapper(content: str, title: str = "Preview") -> str:
 def _get_cache_key(text: str) -> str:
     """Generate cache key from markdown text.
 
+    Includes cache version to invalidate old entries when
+    the HTML template changes (e.g. new CDN assets).
+
     Args:
         text: The markdown text.
 
     Returns:
-        SHA256 hash as hex string.
+        Version-prefixed SHA256 hash as hex string.
     """
-    return hashlib.sha256(text.encode()).hexdigest()[:16]
+    return f"v{CACHE_VERSION}_" + hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def _get_cached_html(text: str) -> Path | None:
@@ -232,4 +262,7 @@ __all__ = [
     "preview_html",
     "clear_cache",
     "get_cache_dir",
+    "KATEX_VERSION",
+    "KATEX_HTML",
+    "CACHE_VERSION",
 ]

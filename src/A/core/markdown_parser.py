@@ -67,7 +67,10 @@ def get_parser() -> mistune.Markdown:
     global _markdown_parser
     if _markdown_parser is None:
         renderer = HighlightRenderer()
-        _markdown_parser = mistune.create_markdown(renderer=renderer)
+        _markdown_parser = mistune.create_markdown(
+            renderer=renderer,
+            plugins=["math"],
+        )
     return _markdown_parser
 
 
@@ -82,7 +85,7 @@ def render_markdown(text: str, escape: bool = True) -> str:
         Rendered HTML string.
     """
     renderer = HighlightRenderer(escape=escape)
-    md = mistune.create_markdown(renderer=renderer)
+    md = mistune.create_markdown(renderer=renderer, plugins=["math"])
     return md(text)
 
 
