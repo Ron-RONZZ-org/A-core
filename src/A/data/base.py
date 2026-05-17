@@ -53,7 +53,9 @@ class SQLiteDB:
     def _get_conn(self) -> sqlite3.Connection:
         """Get or create a cached connection with WAL mode."""
         if self._conn is None:
-            self._conn = sqlite3.connect(self.path)
+            # 5-second busy timeout: retry locked databases instead of
+            # immediately raising "database is locked"
+            self._conn = sqlite3.connect(self.path, timeout=5.0)
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             # Keep WAL small: auto-checkpoint every 100 pages (~400KB)
