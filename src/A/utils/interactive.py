@@ -131,11 +131,19 @@ def confirm_action(
 
     default_str = prompt_abbr[1] if default else prompt_abbr[3]  # J or n / Y or n / O or n
 
-    while True:
+    for _attempt in range(10):
         raw = input(f"{message} {prompt_abbr}: ").strip().lower()
+        import sys as _sys
+        _sys.stderr.write(f"[confirm_action] lang={lang!r} raw={raw!r} yes={yes_words} no={no_words}\n")
+        _sys.stderr.flush()
         if not raw:
             return default
         if raw in yes_words:
             return True
         if raw in no_words:
             return False
+
+    # After 10 failed attempts, fall back to default
+    import sys as _sys
+    _sys.stderr.write(f"[confirm_action] 10 failed attempts, falling back to default={default}\n")
+    return default
