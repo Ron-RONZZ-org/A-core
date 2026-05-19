@@ -70,7 +70,8 @@ class _TextExtractor(HTMLParser):
 _LATEX_NOISE: list[tuple[str, str]] = [
     (r"\\(?:newcommand|renewcommand|DeclareMathOperator)\*?\{[^}]*\}\{[^}]*\}", ""),
     (r"\\(?:begin|end)\{(?:document|align\*?|equation\*?|enumerate|itemize)\}", ""),
-    (r"\\(?:text|mathbf|mathrm|mathbb|mathcal|mathit|mathsf|mathtt)\{[^}]*\}", ""),
+    # Formatting commands: keep content but strip the wrapper
+    (r"\\(?:text|mathbf|mathrm|mathbb|mathcal|mathit|mathsf|mathtt|textit|textbf|emph|underline|textrm|textsf|texttt|textsc|textsl)\{([^}]*)\}", r"\1"),
     (r"\\(?:displaystyle|textstyle|scriptstyle|scriptscriptstyle)", ""),
     (r"\\(?:quad|qquad|enspace|thickspace|medspace|;|:)", " "),
     (r"\\(?:left|right|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)", ""),
@@ -88,8 +89,14 @@ def _strip_latex_noise(text: str) -> str:
     and other non-semantic LaTeX commands.  Lines consisting entirely of
     short LaTeX definitions are removed to save context budget.
     """
+    # Complex patterns via regex
     for pattern, repl in _LATEX_NOISE:
         text = re.sub(pattern, repl, text)
+
+    # Simple literal patterns — str.replace avoids regex escaping quirks
+    for literal in (r"\[", r"\]"):
+        text = text.replace(literal, "")
+
     # Remove lines that are entirely short LaTeX command definitions
     lines = [
         line for line in text.split("\n")
