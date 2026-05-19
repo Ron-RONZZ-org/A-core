@@ -45,16 +45,19 @@ _KATEX_FILES = {
     "auto-render.min.js": f"{_KATEX_CDN}/contrib/auto-render.min.js",
 }
 
-# KaTeX auto-render configuration block (inlined in JS call)
-_AUTO_RENDER_CONFIG = """renderMathInElement(document.body, {
-    delimiters: [
-      {left: '$$', right: '$$', display: true},
-      {left: '$', right: '$', display: false},
-      {left: '\\\\[', right: '\\\\]', display: true},
-      {left: '\\\\(', right: '\\\\)', display: false}
-    ],
-    throwOnError: false,
-    strict: 'ignore'
+# KaTeX auto-render configuration block — wrapped in DOMContentLoaded so it
+# works both when inlined in <head> (DOM not yet ready) and via CDN onload.
+_AUTO_RENDER_CONFIG = """document.addEventListener('DOMContentLoaded', function() {
+    renderMathInElement(document.body, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false},
+          {left: '\\\\[', right: '\\\\]', display: true},
+          {left: '\\\\(', right: '\\\\)', display: false}
+        ],
+        throwOnError: false,
+        strict: 'ignore'
+    });
 });"""
 
 
@@ -118,6 +121,11 @@ def _inline_katex_html() -> str:
 
     if css_path.exists():
         css_content = css_path.read_text(encoding="utf-8")
+        # Replace relative font URLs (url(fonts/...)) with absolute CDN URLs
+        # so fonts load correctly when the HTML file is opened from /tmp/.
+        css_content = css_content.replace(
+            "url(fonts/", f"url({_KATEX_CDN}/fonts/"
+        )
         parts.append(f"<style>\n{css_content}\n</style>")
 
     if js_path.exists():
