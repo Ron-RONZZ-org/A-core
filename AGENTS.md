@@ -48,13 +48,14 @@ Context resolution order (highest priority first):
 ```
 src/A/
 ├── cli.py           # Main entry, plugin discovery, modulo sub-app
-├── core/           # Zero dependencies
+├── core/           # Zero dependencies (stdlib only)
 │   ├── types.py
 │   ├── paths.py
 │   ├── i18n.py
 │   ├── config.py
 │   ├── exceptions.py
-│   └── registry.py  # Module manifest fetch, cache, search
+│   ├── registry.py  # Module manifest fetch, cache, search
+│   └── http.py      # SSRF-protected URL text fetching
 ├── data/           # Depends on core
 │   └── base.py
 ├── utils/         # Depends on nothing
@@ -654,6 +655,31 @@ html = render_markdown("# Hello\n\nWorld")
 md = "```python\nx = 1\n```"
 html = render_markdown(md, escape=False)
 ```
+
+### HTTP (`A.core.http`)
+
+SSRF-protected URL text fetching. Stdlib only (no external deps).
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `fetch_text(url, *, max_bytes, timeout) -> str` | Decoded text | Fetch URL with SSRF protection, size limit, and timeout |
+
+```python
+from A.core.http import fetch_text
+
+try:
+    text = fetch_text("https://example.com/article")
+    print(text[:200])
+except (ValueError, URLError) as e:
+    error(str(e))
+```
+
+**Security guarantees:**
+- Only `http://` and `https://` schemes allowed
+- Private/reserved IPs blocked (loopback, RFC1918, link-local, IPv6 unique-local) — SSRF prevention
+- Post-redirect IP re-validation
+- Binary content detection (null byte in first 4KB)
+- Size truncation to `max_bytes` (default 5MB)
 
 ### Markdown HTML Preview (`A.core.markdown_html_view`)
 
