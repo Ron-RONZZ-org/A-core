@@ -15,6 +15,7 @@ from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
+from A.core.web import html_to_text, extract_text
 
 # Lazy import: http.py may not exist on older installations.
 try:
@@ -95,3 +96,4 @@ __all__ = [
 
 if fetch_text is not None:
     __all__.append("fetch_text")
+__all__.extend(["html_to_text", "extract_text"])

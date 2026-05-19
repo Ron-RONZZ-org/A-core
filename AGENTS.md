@@ -48,14 +48,16 @@ Context resolution order (highest priority first):
 ```
 src/A/
 ├── cli.py           # Main entry, plugin discovery, modulo sub-app
-├── core/           # Zero dependencies (stdlib only)
+├── core/           # Core utilities (stdlib + optional deps)
 │   ├── types.py
 │   ├── paths.py
 │   ├── i18n.py
 │   ├── config.py
 │   ├── exceptions.py
 │   ├── registry.py  # Module manifest fetch, cache, search
-│   └── http.py      # SSRF-protected URL text fetching
+│   ├── network.py   # Connection error formatting
+│   ├── http.py      # SSRF-protected URL text fetching
+│   └── web.py       # HTML→text extraction (trafilatura opt.)
 ├── data/           # Depends on core
 │   └── base.py
 ├── utils/         # Depends on nothing
@@ -71,6 +73,9 @@ src/A/
 ```
 
 **Dependency rule:** CLI → Service → Data → Core. No reverse dependencies.
+Core uses stdlib where possible; non-stdlib dependencies (cryptography,
+mistune, Pygments) are declared in ``pyproject.toml`` with optional extras
+for trafilatura, keyring, and clipboard support.
 
 ---
 
@@ -658,7 +663,7 @@ html = render_markdown(md, escape=False)
 
 ### HTTP (`A.core.http`)
 
-SSRF-protected URL text fetching. Stdlib only (no external deps).
+SSRF-protected URL text fetching. Stdlib only.
 
 | Function | Returns | Description |
 |----------|---------|-------------|
@@ -680,6 +685,35 @@ except (ValueError, URLError) as e:
 - Post-redirect IP re-validation
 - Binary content detection (null byte in first 4KB)
 - Size truncation to `max_bytes` (default 5MB)
+
+### Web (`A.core.web`)
+
+HTML-to-text extraction for LLM consumption. Two backends: trafilatura
+(intelligent main-content extraction, optional) and stdlib HTMLParser
+(fallback). Both apply LaTeX noise removal.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `html_to_text(html, max_chars) -> str` | Plain text | Extract text from HTML (trafilatura if available, else stdlib) |
+| `extract_text(url, ...) -> str` | Plain text | Fetch URL + extract text in one call |
+
+```python
+from A.core.web import html_to_text, extract_text
+
+# From raw HTML
+text = html_to_text(raw_html)
+
+# Fetch + extract
+text = extract_text("https://example.com/article")
+```
+
+**Install trafilatura for better extraction:**
+```bash
+pip install A-core[web]
+```
+
+**LaTeX noise removal:** Strips `\newcommand`, `\mathbf{...}`, `\(...\)`,
+`\[...\]`, `$...$`, and other non-semantic LaTeX markup automatically.
 
 ### Markdown HTML Preview (`A.core.markdown_html_view`)
 

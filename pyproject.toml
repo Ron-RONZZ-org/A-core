@@ -27,6 +27,7 @@ dev = [
 search = ["rapidfuzz>=3.0"]
 keyring = ["keyring>=24.0.0"]
 clipboard = ["pyperclip>=1.8"]
+web = ["trafilatura>=2.0.0"]
 
 [project.scripts]
 A = "A.cli:main"
