@@ -1,7 +1,20 @@
 # -*- coding: utf-8 -*-
 """Tests for markdown parsing and HTML preview."""
 
+import urllib.request
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def reset_module_caches():
+    """Reset module-level caches before each test to avoid test interaction."""
+    from A.core.markdown_html_view import _katex_html_cache, _html_cache_dir
+
+    # Clear KaTeX inline cache
+    import A.core.markdown_html_view as mhv
+    mhv._katex_html_cache = None
+    mhv._html_cache_dir = None
 
 
 def test_render_markdown_basic():
@@ -106,13 +119,18 @@ def test_render_markdown_inline_math():
 
 
 def test_generate_html_wrapper_includes_katex():
-    """Test HTML wrapper includes KaTeX CDN assets."""
-    from A.core.markdown_html_view import _generate_html_wrapper
+    """Test HTML wrapper includes KaTeX assets (string or callable)."""
+    from A.core.markdown_html_view import _generate_html_wrapper, KATEX_HTML, _katex_html_cache
+
+    # Reset module cache to force CDN fallback in test (no network)
+    import A.core.markdown_html_view as mhv
+    mhv._katex_html_cache = None
 
     html = _generate_html_wrapper("<p>Test</p>", title="Test")
-    assert "katex.min.css" in html
-    assert "katex.min.js" in html
-    assert "auto-render.min.js" in html
+    # Should contain either inline CSS/JS or CDN references
+    has_cdn = "cdn.jsdelivr.net" in html
+    has_inline_style = "<style>" in html and "katex" in html.lower()
+    assert has_cdn or has_inline_style, "HTML must contain KaTeX assets (CDN or inline)"
     assert "renderMathInElement" in html
 
 
@@ -123,3 +141,132 @@ def test_cache_key_includes_version():
     key = _get_cache_key("test content")
     assert key.startswith(f"v{CACHE_VERSION}_")
     assert len(key) > len(f"v{CACHE_VERSION}_")  # Has hash suffix
+
+
+# ── KaTeX offline / inline tests ─────────────────────────────────────────
+
+
+def test_katex_html_is_callable():
+    """Test KATEX_HTML is a callable function, not a string."""
+    from A.core.markdown_html_view import KATEX_HTML
+    assert callable(KATEX_HTML)
+
+
+def test_katex_html_fallback_to_cdn(monkeypatch):
+    """Test KATEX_HTML() returns CDN fallback when local files don't exist."""
+    from A.core.markdown_html_view import KATEX_HTML, _katex_html_cache, _katex_dir
+    import A.core.markdown_html_view as mhv
+
+    # Force CDN fallback by making ensure_katex return False
+    mhv._katex_html_cache = None
+    monkeypatch.setattr(mhv, "_ensure_katex", lambda: False)
+
+    html = KATEX_HTML()
+    assert "cdn.jsdelivr.net" in html
+    assert "katex.min.css" in html
+    assert "katex.min.js" in html
+    assert "auto-render.min.js" in html
+
+
+def test_katex_html_inline_when_local(monkeypatch, tmp_path):
+    """Test KATEX_HTML() inlines content when local KaTeX files exist."""
+    from A.core.markdown_html_view import KATEX_HTML, _katex_html_cache, _katex_dir
+    import A.core.markdown_html_view as mhv
+
+    # Create fake KaTeX files in the expected cache dir
+    kdir = tmp_path / "katex" / "0.16.11"
+    kdir.mkdir(parents=True)
+    (kdir / "katex.min.css").write_text("/* fake katex css */")
+    (kdir / "katex.min.js").write_text("// fake katex js")
+    (kdir / "auto-render.min.js").write_text("// fake auto-render")
+
+    mhv._katex_html_cache = None
+    monkeypatch.setattr("A.core.paths.cache_dir", lambda: tmp_path)
+
+    html = KATEX_HTML()
+    assert "/* fake katex css */" in html
+    assert "// fake katex js" in html
+    assert "// fake auto-render" in html
+    assert "renderMathInElement" in html
+    assert "cdn.jsdelivr.net" not in html
+
+
+def test_ensure_katex_download(monkeypatch, tmp_path):
+    """Test ensure_katex downloads and caches files."""
+    from A.core.markdown_html_view import ensure_katex, KATEX_HTML, _katex_dir
+    import A.core.markdown_html_view as mhv
+
+    mhv._katex_html_cache = None
+
+    # Set up temp KaTeX dir with fake files
+    fake_katex_dir = tmp_path / "katex" / "0.16.11"
+    monkeypatch.setattr(mhv, "_katex_dir", lambda: fake_katex_dir)
+
+    # Mock _ensure_katex to create files and return True
+    def _fake_ensure():
+        fake_katex_dir.mkdir(parents=True, exist_ok=True)
+        (fake_katex_dir / "katex.min.css").write_text("/* css */")
+        (fake_katex_dir / "katex.min.js").write_text("// js")
+        (fake_katex_dir / "auto-render.min.js").write_text("// auto-render")
+        return True
+
+    monkeypatch.setattr(mhv, "_ensure_katex", _fake_ensure)
+
+    assert ensure_katex() is True
+
+    # Verify files were created
+    assert (fake_katex_dir / "katex.min.css").exists()
+    assert (fake_katex_dir / "katex.min.js").exists()
+    assert (fake_katex_dir / "auto-render.min.js").exists()
+
+    # Verify module cache was populated (KATEX_HTML should now use inline)
+    html = KATEX_HTML()
+    assert "/* css */" in html
+    assert "// js" in html
+
+    # Verify no CDN fallback
+    assert "cdn.jsdelivr.net" not in html
+
+
+def test_ensure_katex_partial_cleanup(monkeypatch, tmp_path):
+    """Test partial download failure is handled gracefully."""
+    from A.core.markdown_html_view import _ensure_katex
+    import A.core.markdown_html_view as mhv
+
+    fake_katex_dir = tmp_path / "katex" / "0.16.11"
+    monkeypatch.setattr(mhv, "_katex_dir", lambda: fake_katex_dir)
+
+    # Mock urlretrieve to fail immediately
+    def _failing_urlretrieve(url, dest):
+        raise OSError("Network error")
+
+    monkeypatch.setattr("urllib.request.urlretrieve", _failing_urlretrieve)
+
+    result = _ensure_katex()
+    assert result is False
+
+    # No .part files should remain
+    assert list(fake_katex_dir.glob("*.part")) == []
+
+
+def test_clear_cache_clears_katex(monkeypatch, tmp_path):
+    """Test clear_cache also cleans KaTeX downloads."""
+    from A.core.markdown_html_view import clear_cache, get_cache_dir, _katex_dir
+    import A.core.markdown_html_view as mhv
+
+    monkeypatch.setattr("A.core.paths.cache_dir", lambda: tmp_path)
+
+    # Create some HTML cache files
+    (get_cache_dir() / "v3_test.html").write_text("content")
+
+    # Create KaTeX cache
+    kdir = _katex_dir()
+    kdir.mkdir(parents=True)
+    (kdir / "katex.min.css").write_text("/* css */")
+
+    count = clear_cache()
+    assert count >= 2  # HTML + KaTeX files
+
+    # Verify cleanup
+    assert not (kdir / "katex.min.css").exists()
+    assert not kdir.exists()  # Version dir removed
