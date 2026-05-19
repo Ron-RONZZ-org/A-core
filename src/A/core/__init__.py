@@ -15,12 +15,18 @@ from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
-from A.core.http import fetch_text
+
+# Lazy import: http.py may not exist on older installations.
+try:
+    from A.core.http import fetch_text as _fetch_text
+    fetch_text = _fetch_text
+except ImportError:
+    fetch_text = None  # type: ignore[assignment]
 
 __all__ = [
     # Types
     "CommandResult",
-    "PluginInfo", 
+    "PluginInfo",
     "Config",
     # Paths
     "data_dir",
@@ -35,7 +41,7 @@ __all__ = [
     "get_current_language",
     # Exceptions
     "AError",
-    "ConfigError", 
+    "ConfigError",
     "PluginError",
     "DataError",
     "CommandError",
@@ -85,6 +91,7 @@ __all__ = [
     "MigrationStatus",
     # Network
     "format_connection_error",
-    # HTTP
-    "fetch_text",
 ]
+
+if fetch_text is not None:
+    __all__.append("fetch_text")
