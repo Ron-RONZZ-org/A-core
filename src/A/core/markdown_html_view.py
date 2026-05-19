@@ -18,7 +18,6 @@ import re as _re
 import tempfile
 import urllib.error
 import urllib.request
-import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -379,26 +378,31 @@ def _save_cached_html(text: str, html: str) -> Path:
 def preview_markdown(
     text: str,
     use_cache: bool = True,
-    open_browser: bool = True,
+    open_browser: bool = False,
     title: str = "Preview",
 ) -> Path:
-    """Render markdown to HTML and open in browser.
+    """Render markdown to HTML.
 
     Args:
         text: Markdown content.
         use_cache: Whether to use caching (lazy render).
-        open_browser: Whether to open in browser.
+        open_browser: Deprecated, kept for backward compatibility.
         title: Page title.
 
     Returns:
         Path to the rendered HTML file.
     """
+    from A import info as _info, tr_multi as _tr
+
     # Try cache first
     if use_cache:
         cached = _get_cached_html(text)
         if cached is not None:
-            if open_browser:
-                webbrowser.open(cached.as_uri())
+            _info(_tr(
+                f"Aldono HTML: file://{cached}",
+                f"HTML preview: file://{cached}",
+                f"Aperçu HTML: file://{cached}",
+            ))
             return cached
 
     # Render markdown
@@ -418,27 +422,31 @@ def preview_markdown(
             f.write(full_html)
             html_path = Path(f.name)
 
-    if open_browser:
-        webbrowser.open(html_path.as_uri())
-
+    _info(_tr(
+        f"Aldono HTML: file://{html_path}",
+        f"HTML preview: file://{html_path}",
+        f"Aperçu HTML: file://{html_path}",
+    ))
     return html_path
 
 
 def preview_html(
     html: str,
-    open_browser: bool = True,
+    open_browser: bool = False,
     title: str = "Preview",
 ) -> Path:
-    """Open HTML content directly in browser.
+    """Save HTML content to a temporary file.
 
     Args:
         html: HTML content (already rendered).
-        open_browser: Whether to open in browser.
+        open_browser: Deprecated, kept for backward compatibility.
         title: Page title.
 
     Returns:
         Path to the rendered HTML file.
     """
+    from A import info as _info, tr_multi as _tr
+
     full_html = _generate_html_wrapper(html, title=title)
 
     with tempfile.NamedTemporaryFile(
@@ -450,9 +458,11 @@ def preview_html(
         f.write(full_html)
         html_path = Path(f.name)
 
-    if open_browser:
-        webbrowser.open(html_path.as_uri())
-
+    _info(_tr(
+        f"Aldono HTML: file://{html_path}",
+        f"HTML preview: file://{html_path}",
+        f"Aperçu HTML: file://{html_path}",
+    ))
     return html_path
 
 
