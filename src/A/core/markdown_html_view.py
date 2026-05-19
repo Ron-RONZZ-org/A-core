@@ -11,8 +11,10 @@ them into HTML (avoids Chrome ``file://`` CORS restrictions on local
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
+import re as _re
 import tempfile
 import urllib.error
 import urllib.request
@@ -39,11 +41,14 @@ KATEX_VERSION = "0.16.11"
 _KATEX_CDN = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist"
 
 # Files to download from KaTeX CDN (css, js, auto-render)
-_KATEX_FILES = {
+_KATEX_FILES: dict[str, str] = {
     "katex.min.css": f"{_KATEX_CDN}/katex.min.css",
     "katex.min.js": f"{_KATEX_CDN}/katex.min.js",
     "auto-render.min.js": f"{_KATEX_CDN}/contrib/auto-render.min.js",
 }
+
+# CDN base for font downloads — discovered dynamically from CSS @font-face
+_KATEX_FONTS_CDN = f"{_KATEX_CDN}/fonts"
 
 # KaTeX auto-render configuration block — wrapped in DOMContentLoaded so it
 # works both when inlined in <head> (DOM not yet ready) and via CDN onload.
@@ -75,7 +80,7 @@ def _katex_dir() -> Path:
 
 
 def _ensure_katex() -> bool:
-    """Download KaTeX CSS/JS assets to local cache on first use.
+    """Download KaTeX CSS/JS/assets to local cache on first use.
 
     Uses atomic ``.part`` → rename pattern to avoid corrupt files from
     partial downloads. Safe for concurrent processes on the same filesystem.
@@ -86,27 +91,54 @@ def _ensure_katex() -> bool:
     kdir = _katex_dir()
     kdir.mkdir(parents=True, exist_ok=True)
 
-    all_available = True
-    for filename, url in _KATEX_FILES.items():
-        dest = kdir / filename
+    # Phase 1: download known files (css, js, auto-render)
+    all_available = _download_files(_KATEX_FILES, kdir)
+    if not all_available:
+        return False
+
+    # Phase 2: download woff2 font files discovered from CSS
+    css_path = kdir / "katex.min.css"
+    if css_path.exists():
+        css_text = css_path.read_text(encoding="utf-8")
+        font_names = _re.findall(r"url\(fonts/([\w-]+\.woff2)\)", css_text)
+        font_urls = {
+            fname: f"{_KATEX_FONTS_CDN}/{fname}"
+            for fname in font_names
+        }
+        all_available = _download_files(font_urls, kdir)
+
+    return all_available
+
+
+def _download_files(
+    files: dict[str, str], dest_dir: Path
+) -> bool:
+    """Download a dict of {filename: url} to dest_dir with atomic .part rename.
+
+    Returns:
+        True if all files exist, False on any failure.
+    """
+    for filename, url in files.items():
+        dest = dest_dir / filename
         if dest.exists():
             continue
-
-        # Atomic download: write to .part, then rename
         part = dest.with_suffix(".part")
         try:
             urllib.request.urlretrieve(url, part)
             part.rename(dest)
         except Exception:
-            all_available = False
             part.unlink(missing_ok=True)
-            break
-
-    return all_available
+            return False
+    return True
 
 
 def _inline_katex_html() -> str:
     """Build KaTeX HTML snippet by inlining locally cached files.
+
+    Fonts (.woff2) are base64-encoded and inlined as data URIs in the CSS,
+    making the HTML fully self-contained and working offline in all browsers.
+    Non-woff2 font formats (.woff, .ttf) are stripped from the CSS since
+    all modern browsers support woff2.
 
     Returns:
         ``<style>`` block with CSS + ``<script>`` blocks with JS, all inlined.
@@ -121,11 +153,25 @@ def _inline_katex_html() -> str:
 
     if css_path.exists():
         css_content = css_path.read_text(encoding="utf-8")
-        # Replace relative font URLs (url(fonts/...)) with absolute CDN URLs
-        # so fonts load correctly when the HTML file is opened from /tmp/.
-        css_content = css_content.replace(
-            "url(fonts/", f"url({_KATEX_CDN}/fonts/"
+
+        # Replace each woff2 font URL with a base64 data URI
+        def _replace_font(m: re.Match) -> str:
+            font_name = m.group(1)
+            font_path = kdir / font_name
+            if font_path.exists():
+                b64 = base64.b64encode(font_path.read_bytes()).decode("ascii")
+                return f"url(data:font/woff2;base64,{b64})"
+            # Fallback: keep original CDN URL
+            return f"url({_KATEX_FONTS_CDN}/{font_name})"
+
+        css_content = _re.sub(
+            r"url\(fonts/([\w-]+\.woff2)\)", _replace_font, css_content
         )
+        # Strip non-woff2 font formats — woff2 covers all modern browsers
+        css_content = _re.sub(
+            r",\s*url\(fonts/[\w-]+\.(?:woff|ttf)\)", "", css_content
+        )
+
         parts.append(f"<style>\n{css_content}\n</style>")
 
     if js_path.exists():
