@@ -15,6 +15,7 @@ from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
+from A.core.http import fetch_text
 
 __all__ = [
     # Types
@@ -84,4 +85,6 @@ __all__ = [
     "MigrationStatus",
     # Network
     "format_connection_error",
+    # HTTP
+    "fetch_text",
 ]
