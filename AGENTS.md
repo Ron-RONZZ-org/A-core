@@ -661,23 +661,32 @@ html = render_markdown(md, escape=False)
 |----------|-------------|
 | `preview_markdown(text, use_cache, open_browser, title) -> Path` | Render and open in browser |
 | `preview_html(html, open_browser, title) -> Path` | Open HTML directly |
-| `clear_cache() -> int` | Clear cached HTML files |
+| `KATEX_HTML() -> str` | Get KaTeX HTML snippet (inline local or CDN) |
+| `ensure_katex() -> bool` | Pre-download KaTeX assets for offline use |
+| `clear_cache() -> int` | Clear cached HTML files and KaTeX downloads |
 | `get_cache_dir() -> Path` | Get cache directory |
 
 ```python
-from A.core.markdown_html_view import preview_markdown, preview_html
+from A.core.markdown_html_view import preview_markdown, preview_html, KATEX_HTML, ensure_katex
 
 # Render markdown and open in browser
 path = preview_markdown("# Notes\n\nContent here", open_browser=True)
 
 # Or open raw HTML
 path = preview_html("<h1>Custom</h1>", open_browser=True)
+
+# Get KaTeX snippet for embedding in custom HTML
+katex_snippet = KATEX_HTML()  # callable, not a constant
 ```
 
 **Features:**
 - File-based caching (lazy render)
 - Opens in default browser via `webbrowser.open()`
 - Cache in `~/.cache/A/markdown/`
+- Offline KaTeX: assets downloaded on first use, inlined into HTML
+- Falls back to CDN if download fails
+- Also caches in `~/.cache/A/katex/`
+- Cache cleared via `clear_cache()`
 
 ### Links (`A.core.links`)
 
