@@ -1,10 +1,21 @@
 # -*- coding: utf-8 -*-
-"""HTML preview for markdown with browser rendering and caching."""
+"""HTML preview for markdown with KaTeX math rendering.
+
+Supports offline KaTeX by downloading assets on first use and inlining
+them into HTML (avoids Chrome ``file://`` CORS restrictions on local
+``<script>``/``<link>`` tags).
+
+- Phase 1: inline KaTeX into HTML (offline after first download)
+- Phase 2 (future): ``encik serve`` local HTTP server for rich browsing
+"""
 
 from __future__ import annotations
 
 import hashlib
+import os
 import tempfile
+import urllib.error
+import urllib.request
 import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -18,31 +29,175 @@ if TYPE_CHECKING:
 # Cache directory for rendered HTML
 _html_cache_dir: Path | None = None
 
-# Cache version — bump when HTML template changes (e.g. new CDN assets)
-CACHE_VERSION = 2
+# Cache version — bump when HTML template or KaTeX assets change
+CACHE_VERSION = 3
 
-# KaTeX CDN version — pinned for reproducibility (matches autish-legacy)
+# KaTeX version — pinned for reproducibility (matches autish-legacy)
 KATEX_VERSION = "0.16.11"
 
-# KaTeX CDN assets for HTML templates (link + script tags for <head>)
-KATEX_HTML = f"""<link rel="stylesheet"
-  href="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.css">
-<script defer
-  src="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/katex.min.js">
-</script>
-<script defer
-  src="https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist/contrib/auto-render.min.js"
-  onload="renderMathInElement(document.body, {{
+# CDN base URL for KaTeX
+_KATEX_CDN = f"https://cdn.jsdelivr.net/npm/katex@{KATEX_VERSION}/dist"
+
+# Files to download from KaTeX CDN (css, js, auto-render)
+_KATEX_FILES = {
+    "katex.min.css": f"{_KATEX_CDN}/katex.min.css",
+    "katex.min.js": f"{_KATEX_CDN}/katex.min.js",
+    "auto-render.min.js": f"{_KATEX_CDN}/contrib/auto-render.min.js",
+}
+
+# KaTeX auto-render configuration block (inlined in JS call)
+_AUTO_RENDER_CONFIG = """renderMathInElement(document.body, {
     delimiters: [
-      {{left: '$$', right: '$$', display: true}},
-      {{left: '$', right: '$', display: false}},
-      {{left: '\\\\[', right: '\\\\]', display: true}},
-      {{left: '\\\\(', right: '\\\\)', display: false}}
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false},
+      {left: '\\\\[', right: '\\\\]', display: true},
+      {left: '\\\\(', right: '\\\\)', display: false}
     ],
     throwOnError: false,
     strict: 'ignore'
-  }});">
-</script>"""
+});"""
+
+
+# ── KaTeX asset management ───────────────────────────────────────────────
+
+
+def _katex_dir() -> Path:
+    """Return the local KaTeX cache directory path.
+
+    ``~/.cache/A/katex/{version}/`` — versioned so old dirs are left in place
+    when the KaTeX version is bumped.
+    """
+    from A.core.paths import cache_dir as _cd
+    return _cd() / "katex" / KATEX_VERSION
+
+
+def _ensure_katex() -> bool:
+    """Download KaTeX CSS/JS assets to local cache on first use.
+
+    Uses atomic ``.part`` → rename pattern to avoid corrupt files from
+    partial downloads. Safe for concurrent processes on the same filesystem.
+
+    Returns:
+        True if assets are available locally, False on any failure.
+    """
+    kdir = _katex_dir()
+    kdir.mkdir(parents=True, exist_ok=True)
+
+    all_available = True
+    for filename, url in _KATEX_FILES.items():
+        dest = kdir / filename
+        if dest.exists():
+            continue
+
+        # Atomic download: write to .part, then rename
+        part = dest.with_suffix(".part")
+        try:
+            urllib.request.urlretrieve(url, part)
+            part.rename(dest)
+        except Exception:
+            all_available = False
+            part.unlink(missing_ok=True)
+            break
+
+    return all_available
+
+
+def _inline_katex_html() -> str:
+    """Build KaTeX HTML snippet by inlining locally cached files.
+
+    Returns:
+        ``<style>`` block with CSS + ``<script>`` blocks with JS, all inlined.
+    """
+    kdir = _katex_dir()
+
+    css_path = kdir / "katex.min.css"
+    js_path = kdir / "katex.min.js"
+    auto_render_path = kdir / "auto-render.min.js"
+
+    parts: list[str] = []
+
+    if css_path.exists():
+        css_content = css_path.read_text(encoding="utf-8")
+        parts.append(f"<style>\n{css_content}\n</style>")
+
+    if js_path.exists():
+        js_content = js_path.read_text(encoding="utf-8")
+        parts.append(f"<script>\n{js_content}\n</script>")
+
+    if auto_render_path.exists():
+        auto_render_content = auto_render_path.read_text(encoding="utf-8")
+        parts.append(
+            f"<script>\n{auto_render_content}\n"
+            f"{_AUTO_RENDER_CONFIG}\n"
+            f"</script>"
+        )
+
+    return "\n".join(parts)
+
+
+def _cdn_katex_html() -> str:
+    """Build KaTeX HTML snippet using CDN URLs (fallback).
+
+    Returns:
+        ``<link>`` and ``<script>`` tags pointing to the KaTeX CDN.
+    """
+    return (
+        f'<link rel="stylesheet" href="{_KATEX_CDN}/katex.min.css">\n'
+        f'<script defer src="{_KATEX_CDN}/katex.min.js"></script>\n'
+        f'<script defer src="{_KATEX_CDN}/contrib/auto-render.min.js"\n'
+        f'  onload="{_AUTO_RENDER_CONFIG}">\n'
+        f"</script>"
+    )
+
+
+# Module-level cache: avoid re-reading files on every call
+_katex_html_cache: str | None = None
+
+
+def KATEX_HTML() -> str:
+    """Return the KaTeX HTML snippet for embedding in HTML pages.
+
+    Prefers locally cached (inlined) assets for offline use.
+    Falls back to CDN URLs if local assets are unavailable.
+
+    The result is cached in memory after the first successful call,
+    avoiding repeated filesystem reads and download attempts.
+
+    Returns:
+        HTML string (``<style>``/``<script>`` blocks or CDN ``<link>``/``<script>``).
+    """
+    global _katex_html_cache
+    if _katex_html_cache is not None:
+        return _katex_html_cache
+
+    # Attempt inline (local) path
+    if _ensure_katex():
+        result = _inline_katex_html()
+    else:
+        result = _cdn_katex_html()
+
+    _katex_html_cache = result
+    return result
+
+
+def ensure_katex() -> bool:
+    """Explicitly trigger KaTeX download.
+
+    Can be called at startup (e.g., from ``agordi``) to pre-cache KaTeX
+    assets before going offline.
+
+    Returns:
+        True if assets are available locally.
+    """
+    success = _ensure_katex()
+    if success:
+        # Pre-populate module cache so KATEX_HTML() doesn't re-check
+        global _katex_html_cache
+        _katex_html_cache = _inline_katex_html()
+    return success
+
+
+# ── Cache directory ──────────────────────────────────────────────────────
 
 
 def get_cache_dir() -> Path:
@@ -59,8 +214,11 @@ def get_cache_dir() -> Path:
     return _html_cache_dir
 
 
+# ── HTML page template ──────────────────────────────────────────────────
+
+
 def _generate_html_wrapper(content: str, title: str = "Preview") -> str:
-    """Wrap HTML content in a full page template.
+    """Wrap HTML content in a full page template with KaTeX support.
 
     Args:
         content: The HTML body content.
@@ -69,13 +227,14 @@ def _generate_html_wrapper(content: str, title: str = "Preview") -> str:
     Returns:
         Complete HTML page.
     """
+    katex_html = KATEX_HTML()
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{title}</title>
-    {KATEX_HTML}
+    {katex_html}
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -110,11 +269,14 @@ def _generate_html_wrapper(content: str, title: str = "Preview") -> str:
 </html>"""
 
 
+# ── Cache helpers ───────────────────────────────────────────────────────
+
+
 def _get_cache_key(text: str) -> str:
     """Generate cache key from markdown text.
 
     Includes cache version to invalidate old entries when
-    the HTML template changes (e.g. new CDN assets).
+    the HTML template changes (e.g. new KaTeX version).
 
     Args:
         text: The markdown text.
@@ -157,6 +319,9 @@ def _save_cached_html(text: str, html: str) -> Path:
     return cache_file
 
 
+# ── Public preview functions ────────────────────────────────────────────
+
+
 def preview_markdown(
     text: str,
     use_cache: bool = True,
@@ -190,7 +355,6 @@ def preview_markdown(
     if use_cache:
         html_path = _save_cached_html(text, full_html)
     else:
-        # Use temp file
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".html",
@@ -200,7 +364,6 @@ def preview_markdown(
             f.write(full_html)
             html_path = Path(f.name)
 
-    # Open in browser
     if open_browser:
         webbrowser.open(html_path.as_uri())
 
@@ -224,7 +387,6 @@ def preview_html(
     """
     full_html = _generate_html_wrapper(html, title=title)
 
-    # Use temp file
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".html",
@@ -241,19 +403,30 @@ def preview_html(
 
 
 def clear_cache() -> int:
-    """Clear the HTML cache directory.
+    """Clear the HTML and KaTeX cache directories.
 
     Returns:
-        Number of files deleted.
+        Number of files deleted (HTML + KaTeX).
     """
-    cache_dir = get_cache_dir()
-    if not cache_dir.exists():
-        return 0
-
     count = 0
-    for file in cache_dir.glob("*.html"):
-        file.unlink()
-        count += 1
+    # Clear HTML cache
+    cache_dir = get_cache_dir()
+    if cache_dir.exists():
+        for file in cache_dir.glob("*.html"):
+            file.unlink()
+            count += 1
+
+    # Clear KaTeX cache (all version dirs)
+    from A.core.paths import cache_dir as _pd
+    katex_root = _pd() / "katex"
+    if katex_root.exists():
+        for ver_dir in katex_root.iterdir():
+            if ver_dir.is_dir():
+                for f in ver_dir.iterdir():
+                    f.unlink()
+                    count += 1
+                ver_dir.rmdir()
+
     return count
 
 
@@ -262,7 +435,8 @@ __all__ = [
     "preview_html",
     "clear_cache",
     "get_cache_dir",
-    "KATEX_VERSION",
     "KATEX_HTML",
+    "ensure_katex",
+    "KATEX_VERSION",
     "CACHE_VERSION",
 ]
