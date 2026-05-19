@@ -381,7 +381,7 @@ def preview_markdown(
     open_browser: bool = False,
     title: str = "Preview",
 ) -> Path:
-    """Render markdown to HTML.
+    """Render markdown to HTML and return the file path.
 
     Args:
         text: Markdown content.
@@ -390,19 +390,13 @@ def preview_markdown(
         title: Page title.
 
     Returns:
-        Path to the rendered HTML file.
+        Path to the rendered HTML file. Callers should print or
+        open the path as appropriate.
     """
-    from A import info as _info, tr_multi as _tr
-
     # Try cache first
     if use_cache:
         cached = _get_cached_html(text)
         if cached is not None:
-            _info(_tr(
-                f"Aldono HTML: file://{cached}",
-                f"HTML preview: file://{cached}",
-                f"Aperçu HTML: file://{cached}",
-            ))
             return cached
 
     # Render markdown
@@ -422,11 +416,6 @@ def preview_markdown(
             f.write(full_html)
             html_path = Path(f.name)
 
-    _info(_tr(
-        f"Aldono HTML: file://{html_path}",
-        f"HTML preview: file://{html_path}",
-        f"Aperçu HTML: file://{html_path}",
-    ))
     return html_path
 
 
@@ -443,10 +432,9 @@ def preview_html(
         title: Page title.
 
     Returns:
-        Path to the rendered HTML file.
+        Path to the rendered HTML file. Callers should print or
+        open the path as appropriate.
     """
-    from A import info as _info, tr_multi as _tr
-
     full_html = _generate_html_wrapper(html, title=title)
 
     with tempfile.NamedTemporaryFile(
@@ -458,11 +446,6 @@ def preview_html(
         f.write(full_html)
         html_path = Path(f.name)
 
-    _info(_tr(
-        f"Aldono HTML: file://{html_path}",
-        f"HTML preview: file://{html_path}",
-        f"Aperçu HTML: file://{html_path}",
-    ))
     return html_path
 
 
