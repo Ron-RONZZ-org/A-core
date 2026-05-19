@@ -133,7 +133,7 @@ def test_select_row_formatter_called(mock_prompt):
 def test_confirm_yes():
     """confirm_action returns True when confirmed."""
     from unittest.mock import patch as _p
-    with _p("builtins.input", return_value="y"), \
+    with _p("A.utils.interactive.typer.prompt", return_value="y"), \
          _p("A.core.i18n.get_current_language", return_value="en"):
         assert confirm_action("Proceed?") is True
 
@@ -141,7 +141,7 @@ def test_confirm_yes():
 def test_confirm_no():
     """confirm_action returns False when declined."""
     from unittest.mock import patch as _p
-    with _p("builtins.input", return_value="n"), \
+    with _p("A.utils.interactive.typer.prompt", return_value="n"), \
          _p("A.core.i18n.get_current_language", return_value="en"):
         assert confirm_action("Proceed?") is False
 
@@ -149,7 +149,7 @@ def test_confirm_no():
 def test_confirm_default():
     """Default value is respected."""
     from unittest.mock import patch as _p
-    with _p("builtins.input", return_value=""), \
+    with _p("A.utils.interactive.typer.prompt", return_value=""), \
          _p("A.core.i18n.get_current_language", return_value="en"):
         assert confirm_action("Proceed?", default=True) is True
         assert confirm_action("Proceed?", default=False) is False
@@ -158,7 +158,7 @@ def test_confirm_default():
 def test_confirm_esperanto():
     """confirm_action accepts J (Jes) in Esperanto locale."""
     from unittest.mock import patch as _p
-    with _p("builtins.input", return_value="j"), \
+    with _p("A.utils.interactive.typer.prompt", return_value="j"), \
          _p("A.core.i18n.get_current_language", return_value="eo"):
         assert confirm_action("Proceed?") is True
 
@@ -166,6 +166,6 @@ def test_confirm_esperanto():
 def test_confirm_french():
     """confirm_action accepts O (Oui) in French locale."""
     from unittest.mock import patch as _p
-    with _p("builtins.input", return_value="o"), \
+    with _p("A.utils.interactive.typer.prompt", return_value="o"), \
          _p("A.core.i18n.get_current_language", return_value="fr"):
         assert confirm_action("Proceed?") is True
