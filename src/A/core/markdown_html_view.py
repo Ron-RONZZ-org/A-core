@@ -166,9 +166,13 @@ def _inline_katex_html() -> str:
         css_content = _re.sub(
             r"url\(fonts/([\w-]+\.woff2)\)", _replace_font, css_content
         )
-        # Strip non-woff2 font formats — woff2 covers all modern browsers
+        # Strip non-woff2 font formats — woff2 covers all modern browsers.
+        # Must also remove the trailing format(...) hint, otherwise the
+        # CSS src property has dangling format() calls after the commas
+        # are removed, making the @font-face rule invalid.
         css_content = _re.sub(
-            r",\s*url\(fonts/[\w-]+\.(?:woff|ttf)\)", "", css_content
+            r",\s*url\(fonts/[\w-]+\.(?:woff|ttf)\)\s*format\s*\([^)]*\)",
+            "", css_content,
         )
 
         parts.append(f"<style>\n{css_content}\n</style>")
