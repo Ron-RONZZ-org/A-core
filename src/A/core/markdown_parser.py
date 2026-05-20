@@ -66,12 +66,30 @@ def get_parser() -> mistune.Markdown:
     """
     global _markdown_parser
     if _markdown_parser is None:
-        renderer = HighlightRenderer()
-        _markdown_parser = mistune.create_markdown(
-            renderer=renderer,
-            plugins=["math"],
-        )
+        _markdown_parser = _make_parser()
     return _markdown_parser
+
+
+def _make_parser(escape: bool = True) -> mistune.Markdown:
+    """Create a markdown parser with math support.
+
+    The mistune math plugin's default renderers HTML-escape math content
+    (``&`` → ``&amp;``), which breaks LaTeX ``&`` (matrix column separator,
+    alignment, etc.). We override the renderers to pass raw LaTeX through.
+    """
+    renderer = HighlightRenderer(escape=escape)
+    md = mistune.create_markdown(renderer=renderer, plugins=["math"])
+
+    # Override math renderers to NOT HTML-escape LaTeX content.
+    # The math plugin stores renderers in _BaseRenderer__methods dict.
+    methods = getattr(renderer, "_BaseRenderer__methods", {})
+    methods["inline_math"] = lambda text: (
+        r'<span class="math">\(' + text + r'\)</span>'
+    )
+    methods["block_math"] = lambda text: (
+        '<div class="math">$$\n' + text + '\n$$</div>\n'
+    )
+    return md
 
 
 def render_markdown(text: str, escape: bool = True) -> str:
@@ -84,8 +102,7 @@ def render_markdown(text: str, escape: bool = True) -> str:
     Returns:
         Rendered HTML string.
     """
-    renderer = HighlightRenderer(escape=escape)
-    md = mistune.create_markdown(renderer=renderer, plugins=["math"])
+    md = _make_parser(escape=escape)
     return md(text)
 
 
