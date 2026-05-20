@@ -131,10 +131,20 @@ def _extract_with_trafilatura(html: str) -> str | None:
 
 
 def _extract_stdlib(html: str) -> str:
-    """Fallback: extract plain text via stdlib HTMLParser."""
+    """Fallback: extract plain text via stdlib HTMLParser.
+
+    First tries to extract only the ``<main>`` element (if present),
+    falling back to the full document otherwise.
+    """
+    # Try to isolate <main> content (much less boilerplate)
+    import re
+
+    main_match = re.search(r"<main[^>]*>(.*?)</main>", html, re.DOTALL)
+    source = main_match.group(1) if main_match else html
+
     extractor = _TextExtractor()
     try:
-        extractor.feed(html)
+        extractor.feed(source)
         extractor.close()
     except Exception:
         return html
