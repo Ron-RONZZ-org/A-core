@@ -19,6 +19,7 @@ from A.core.web import html_to_text, extract_text
 from A.core.wikidata import (
     COMMON_PROPERTIES,
     get_common_properties,
+    get_property_details,
     get_property_metadata,
     search_languages,
     search_properties,
@@ -107,6 +108,7 @@ __all__.extend(["html_to_text", "extract_text"])
 __all__.extend([
     "COMMON_PROPERTIES",
     "get_common_properties",
+    "get_property_details",
     "get_property_metadata",
     "search_languages",
     "search_properties",
