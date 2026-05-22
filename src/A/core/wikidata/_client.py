@@ -190,7 +190,8 @@ def _extract_entity_metadata(
 
 
 def search_properties(
-    query: str, languages: list[str] | None = None
+    query: str, languages: list[str] | None = None,
+    timeout: float = 10.0,
 ) -> list[dict[str, Any]]:
     """Search Wikidata for properties matching a query.
 
@@ -204,6 +205,7 @@ def search_properties(
         query: Free-text search string.
         languages: Prioritised language codes for label enrichment.
             Defaults to ``["en", "eo"]``.
+        timeout: Request timeout in seconds. Defaults to 10.0 for fast search UX.
 
     Returns:
         List of result dicts with keys: ligilo, priskribo, aliasoj,
@@ -227,7 +229,7 @@ def search_properties(
                 "type": "property",
                 "limit": "15",
                 "search": query,
-            })
+            }, timeout=timeout)
         except RuntimeError:
             continue
         results = data.get("search")
@@ -272,7 +274,7 @@ def search_properties(
     if dedup:
         prop_ids = [ligilo.split(":", 1)[1] for ligilo in dedup]
         try:
-            metadata = _properties_metadata(prop_ids, languages)
+            metadata = _properties_metadata(prop_ids, languages, timeout=timeout)
         except RuntimeError:
             metadata = {}
         for ligilo, item in dedup.items():
@@ -301,7 +303,8 @@ def search_properties(
 
 
 def _properties_metadata(
-    prop_ids: list[str], languages: list[str] | None = None
+    prop_ids: list[str], languages: list[str] | None = None,
+    timeout: float = 30.0,
 ) -> dict[str, dict[str, Any]]:
     """Fetch metadata for multiple Wikidata properties."""
     if languages is None:
@@ -320,7 +323,7 @@ def _properties_metadata(
         "ids": "|".join(normalized),
         "props": "labels|descriptions|aliases",
         "languages": "|".join(lang_list),
-    })
+    }, timeout=timeout)
     entities = data.get("entities")
     if not isinstance(entities, dict):
         raise RuntimeError("Wikidata API respondo ne enhavas 'entities'")
@@ -335,7 +338,8 @@ def _properties_metadata(
 
 
 def _properties_details(
-    prop_ids: list[str], languages: list[str] | None = None
+    prop_ids: list[str], languages: list[str] | None = None,
+    timeout: float = 30.0,
 ) -> dict[str, dict[str, Any]]:
     """Fetch **per-language** metadata for multiple Wikidata properties.
 
@@ -347,6 +351,7 @@ def _properties_details(
         prop_ids: Wikidata property IDs (e.g. ``["P1082", "P31"]``).
         languages: Language codes to return data for.
             Defaults to ``["en", "eo"]``.
+        timeout: Request timeout in seconds. Defaults to 30.0.
 
     Returns:
         ``{prop_id: {"labels": {...}, "descriptions": {...}, "aliases": {...}}}``
@@ -370,7 +375,7 @@ def _properties_details(
         "ids": "|".join(normalized),
         "props": "labels|descriptions|aliases",
         "languages": "|".join(lang_list),
-    })
+    }, timeout=timeout)
     entities = data.get("entities")
     if not isinstance(entities, dict):
         raise RuntimeError("Wikidata API respondo ne enhavas 'entities'")
@@ -385,13 +390,15 @@ def _properties_details(
 
 
 def get_property_metadata(
-    prop_id: str, languages: list[str] | None = None
+    prop_id: str, languages: list[str] | None = None,
+    timeout: float = 30.0,
 ) -> dict[str, Any]:
     """Fetch metadata for a single Wikidata property.
 
     Args:
         prop_id: e.g. ``"P1082"``
         languages: Prioritised language codes. Defaults to ``["en", "eo"]``.
+        timeout: Request timeout in seconds. Defaults to 30.0.
 
     Returns:
         Dict with keys: etikedo, priskribo, aliasoj.
@@ -408,7 +415,7 @@ def get_property_metadata(
         "ids": prop_id,
         "props": "labels|descriptions|aliases",
         "languages": "|".join(lang_list),
-    })
+    }, timeout=timeout)
     entities = data.get("entities")
     if not isinstance(entities, dict):
         raise RuntimeError("Wikidata API respondo ne enhavas 'entities'")
@@ -421,7 +428,8 @@ def get_property_metadata(
 
 
 def get_property_details(
-    prop_id: str, languages: list[str] | None = None
+    prop_id: str, languages: list[str] | None = None,
+    timeout: float = 30.0,
 ) -> dict[str, Any]:
     """Fetch **per-language** labels, descriptions, and aliases for a Wikidata property.
 
@@ -433,6 +441,7 @@ def get_property_details(
         prop_id: Wikidata property ID (e.g. ``"P1082"``).
         languages: Language codes to return data for.
             Defaults to ``["en", "eo"]``.
+        timeout: Request timeout in seconds. Defaults to 30.0.
 
     Returns:
         ``{
@@ -454,7 +463,7 @@ def get_property_details(
         "ids": prop_id,
         "props": "labels|descriptions|aliases",
         "languages": "|".join(lang_list),
-    })
+    }, timeout=timeout)
     entities = data.get("entities")
     if not isinstance(entities, dict):
         raise RuntimeError("Wikidata API respondo ne enhavas 'entities'")
