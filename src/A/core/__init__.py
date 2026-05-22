@@ -16,6 +16,13 @@ from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
 from A.core.web import html_to_text, extract_text
+from A.core.wikidata import (
+    COMMON_PROPERTIES,
+    get_common_properties,
+    get_property_metadata,
+    search_languages,
+    search_properties,
+)
 
 # Lazy import: http.py may not exist on older installations.
 try:
@@ -97,3 +104,10 @@ __all__ = [
 if fetch_text is not None:
     __all__.append("fetch_text")
 __all__.extend(["html_to_text", "extract_text"])
+__all__.extend([
+    "COMMON_PROPERTIES",
+    "get_common_properties",
+    "get_property_metadata",
+    "search_languages",
+    "search_properties",
+])
