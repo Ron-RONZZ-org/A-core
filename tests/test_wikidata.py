@@ -9,14 +9,17 @@ import pytest
 from A.core.wikidata import (
     COMMON_PROPERTIES,
     get_common_properties,
+    get_property_details,
     get_property_metadata,
     search_languages,
     search_properties,
 )
 from A.core.wikidata._client import (
     _api_get,
+    _extract_all_language_metadata,
     _extract_entity_metadata,
     _language_priority,
+    _properties_details,
     _properties_metadata,
 )
 
@@ -218,6 +221,169 @@ class TestPropertiesMetadataMocked:
         result = _properties_metadata([], languages=["en"])
         assert result == {}
         mock_api.assert_not_called()
+
+
+# ── Per-language extraction ──────────────────────────────────────────────────
+
+
+class TestExtractAllLanguageMetadata:
+    def test_returns_per_language_labels(self) -> None:
+        entity = {
+            "labels": {"en": {"value": "Population"}, "eo": {"value": "Loĝantaro"}},
+            "descriptions": {"en": {"value": "number of inhabitants"}},
+            "aliases": {"en": [{"value": "pop"}], "eo": [{"value": "loĝantaroj"}]},
+        }
+        result = _extract_all_language_metadata(entity, prop_id="P1082")
+        assert result["labels"]["en"] == "Population"
+        assert result["labels"]["eo"] == "Loĝantaro"
+        assert result["descriptions"]["en"] == "number of inhabitants"
+        assert "pop" in result["aliases"]["en"]
+        assert "loĝantaroj" in result["aliases"]["eo"]
+
+    def test_prop_id_in_each_language_aliases(self) -> None:
+        entity = {
+            "labels": {"en": {"value": "Population"}},
+            "descriptions": {},
+            "aliases": {"en": [{"value": "pop"}], "eo": [{"value": "loĝantaroj"}]},
+        }
+        result = _extract_all_language_metadata(entity, prop_id="P1082")
+        assert "p1082" in [a.lower() for a in result["aliases"]["en"]]
+        assert "p1082" in [a.lower() for a in result["aliases"]["eo"]]
+
+    def test_seeds_alias_when_none_exist(self) -> None:
+        entity = {
+            "labels": {"en": {"value": "Population"}},
+            "descriptions": {},
+            "aliases": {},
+        }
+        result = _extract_all_language_metadata(entity, prop_id="P1082")
+        # Should seed "en" (the only language with labels) with prop_id
+        assert result["aliases"] == {"en": ["p1082"]}
+
+    def test_empty_entity(self) -> None:
+        result = _extract_all_language_metadata({}, prop_id="P1")
+        assert result["labels"] == {}
+        assert result["descriptions"] == {}
+        assert result["aliases"] == {"en": ["p1"]}
+
+    def test_handles_missing_keys(self) -> None:
+        result = _extract_all_language_metadata(
+            {"labels": None, "descriptions": None, "aliases": None},
+            prop_id="P1",
+        )
+        assert result["labels"] == {}
+        assert result["descriptions"] == {}
+
+
+# ── get_property_details (mocked) ────────────────────────────────────────────
+
+
+class TestGetPropertyDetailsMocked:
+    @patch("A.core.wikidata._client._api_get")
+    def test_returns_per_language_data(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {
+            "entities": {
+                "P1082": {
+                    "labels": {
+                        "en": {"value": "population"},
+                        "eo": {"value": "loĝantaro"},
+                    },
+                    "descriptions": {
+                        "en": {"value": "number of inhabitants"},
+                        "eo": {"value": "nombro da loĝantoj"},
+                    },
+                    "aliases": {
+                        "en": [{"value": "pop"}],
+                        "eo": [{"value": "loĝantaroj"}],
+                    },
+                },
+            },
+        }
+        result = get_property_details("P1082", languages=["en", "eo"])
+        assert result["id"] == "P1082"
+        assert result["labels"]["en"] == "population"
+        assert result["labels"]["eo"] == "loĝantaro"
+        assert result["descriptions"]["eo"] == "nombro da loĝantoj"
+        assert result["aliases"]["en"] == ["pop", "p1082"]
+        assert result["aliases"]["eo"] == ["loĝantaroj", "p1082"]
+
+    @patch("A.core.wikidata._client._api_get")
+    def test_missing_entity_raises(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {"entities": {}}
+        with pytest.raises(RuntimeError):
+            get_property_details("P999999", languages=["en"])
+
+    @patch("A.core.wikidata._client._api_get")
+    def test_single_language(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {
+            "entities": {
+                "P31": {
+                    "labels": {"en": {"value": "instance of"}},
+                    "descriptions": {},
+                    "aliases": {},
+                },
+            },
+        }
+        result = get_property_details("P31", languages=["en"])
+        assert result["labels"]["en"] == "instance of"
+        assert "en" not in result.get("descriptions", {})
+
+
+# ── _properties_details (mocked) ─────────────────────────────────────────────
+
+
+class TestPropertiesDetailsMocked:
+    @patch("A.core.wikidata._client._api_get")
+    def test_fetches_multiple(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {
+            "entities": {
+                "P31": {
+                    "labels": {
+                        "en": {"value": "instance of"},
+                        "eo": {"value": "estas ekzemplo de"},
+                    },
+                    "descriptions": {},
+                    "aliases": {},
+                },
+                "P279": {
+                    "labels": {
+                        "en": {"value": "subclass of"},
+                        "eo": {"value": "subklaso de"},
+                    },
+                    "descriptions": {},
+                    "aliases": {},
+                },
+            },
+        }
+        result = _properties_details(["P31", "P279"], languages=["en", "eo"])
+        assert "P31" in result
+        assert "P279" in result
+        assert result["P31"]["labels"]["en"] == "instance of"
+        assert result["P31"]["labels"]["eo"] == "estas ekzemplo de"
+        assert result["P279"]["labels"]["eo"] == "subklaso de"
+
+    @patch("A.core.wikidata._client._api_get")
+    def test_empty_ids(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {}
+        result = _properties_details([], languages=["en"])
+        assert result == {}
+        mock_api.assert_not_called()
+
+    @patch("A.core.wikidata._client._api_get")
+    def test_handles_partial_results(self, mock_api: MagicMock) -> None:
+        mock_api.return_value = {
+            "entities": {
+                "P31": {
+                    "labels": {"en": {"value": "instance of"}},
+                    "descriptions": {},
+                    "aliases": {},
+                },
+            },
+        }
+        # P279 is missing from the API response
+        result = _properties_details(["P31", "P279"], languages=["en"])
+        assert "P31" in result
+        assert "P279" not in result
 
 
 # ── Integration-style (no network) ───────────────────────────────────────────
