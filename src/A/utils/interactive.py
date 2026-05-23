@@ -97,7 +97,9 @@ def confirm_action(
 ) -> bool:
     """Display a locale-aware yes/no confirmation prompt.
 
-    Shows [J/n] in Esperanto, [Y/n] in English, [O/n] in French.
+    Shows uppercase letter for the default option:
+    - default=True: [J/n] (eo), [Y/n] (en), [O/n] (fr)
+    - default=False: [j/N] (eo), [y/N] (en), [o/N] (fr)
     Accepts both the full word (jes/yes/oui) and single letter (j/y/o).
 
     Parameters
@@ -116,18 +118,21 @@ def confirm_action(
     lang = get_current_language()
 
     # Locale-specific prompt and accepted inputs
+    # Uppercase letter = default option per terminal convention
     if lang == "eo":
-        prompt_abbr = "[J/n]"
+        yes_letter, no_letter = ("J", "n") if default else ("j", "N")
         yes_words = {"j", "jes"}
         no_words = {"n", "ne"}
     elif lang == "fr":
-        prompt_abbr = "[O/n]"
+        yes_letter, no_letter = ("O", "n") if default else ("o", "N")
         yes_words = {"o", "oui"}
         no_words = {"n", "non"}
     else:
-        prompt_abbr = "[Y/n]"
+        yes_letter, no_letter = ("Y", "n") if default else ("y", "N")
         yes_words = {"y", "yes"}
         no_words = {"n", "no"}
+
+    prompt_abbr = f"[{yes_letter}/{no_letter}]"
 
     for _attempt in range(10):
         raw = typer.prompt(f"{message} {prompt_abbr}", default="").strip().lower()
