@@ -577,7 +577,7 @@ class CRUDService:
         columns = list(entry.keys())
         values = list(entry.values())
         placeholders = ", ".join(["?"] * len(columns))
-        sql = f"INSERT INTO {self._trash_table} ({', '.join(columns)}) VALUES ({placeholders})"
+        sql = f"INSERT OR REPLACE INTO {self._trash_table} ({', '.join(columns)}) VALUES ({placeholders})"
 
         with self.db.transaction() as conn:
             conn.execute(sql, values)
