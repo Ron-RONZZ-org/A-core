@@ -169,3 +169,80 @@ def test_confirm_french():
     with _p("A.utils.interactive.typer.prompt", return_value="o"), \
          _p("A.core.i18n.get_current_language", return_value="fr"):
         assert confirm_action("Proceed?") is True
+
+
+def _capture_prompt_text(return_value: str = "") -> tuple[list[str], str]:
+    """Capture the prompt text passed to typer.prompt.
+
+    Returns (captured_texts, return_value) for use as side_effect.
+    """
+    captured: list[str] = []
+
+    def _side_effect(text: str, **kwargs: object) -> str:
+        captured.append(text)
+        return return_value
+
+    return captured, _side_effect  # type: ignore[return-value]
+
+
+# ── Prompt abbreviation tests ──────────────────────────────────────────────
+
+
+def test_prompt_abbrev_default_true_english():
+    """Shows [Y/n] when default=True in English."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="en"):
+        confirm_action("Go?", default=True)
+    assert "[Y/n]" in captured[0]
+
+
+def test_prompt_abbrev_default_false_english():
+    """Shows [y/N] when default=False in English."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="en"):
+        confirm_action("Go?", default=False)
+    assert "[y/N]" in captured[0]
+
+
+def test_prompt_abbrev_default_true_esperanto():
+    """Shows [J/n] when default=True in Esperanto."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="eo"):
+        confirm_action("Go?", default=True)
+    assert "[J/n]" in captured[0]
+
+
+def test_prompt_abbrev_default_false_esperanto():
+    """Shows [j/N] when default=False in Esperanto."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="eo"):
+        confirm_action("Go?", default=False)
+    assert "[j/N]" in captured[0]
+
+
+def test_prompt_abbrev_default_true_french():
+    """Shows [O/n] when default=True in French."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="fr"):
+        confirm_action("Go?", default=True)
+    assert "[O/n]" in captured[0]
+
+
+def test_prompt_abbrev_default_false_french():
+    """Shows [o/N] when default=False in French."""
+    from unittest.mock import patch as _p
+    captured, side_effect = _capture_prompt_text("")
+    with _p("A.utils.interactive.typer.prompt", side_effect=side_effect), \
+         _p("A.core.i18n.get_current_language", return_value="fr"):
+        confirm_action("Go?", default=False)
+    assert "[o/N]" in captured[0]
