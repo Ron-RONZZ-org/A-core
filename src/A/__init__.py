@@ -10,6 +10,7 @@ from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing
 from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
 from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.registry import fetch_registry, search_registry, get_module_info, get_installed_modules
+from A.core.backup_targets import BackupTarget, get_backup_targets, clear_cache as clear_backup_cache
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.utils import info, success, warning, error, run, copy_to_clipboard, copy_file, serialize_json_columns, deserialize_json_columns
 from A.utils.interactive import select_candidate, confirm_action
@@ -57,6 +58,10 @@ __all__ = [
     # Interactive selection
     "select_candidate",
     "confirm_action",
+    # Backup
+    "BackupTarget",
+    "get_backup_targets",
+    "clear_backup_cache",
     # Links (bidirectional)
     "Link",
     "get_links_db",

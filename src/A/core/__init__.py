@@ -15,6 +15,7 @@ from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.core.migration import get_status, migrate_all, register_migration, MigrationResult, MigrationStatus
 from A.core.network import format_connection_error
+from A.core.backup_targets import BackupTarget, get_backup_targets, clear_cache as clear_backup_cache
 from A.core.web import html_to_text, extract_text
 from A.core.wikidata import (
     COMMON_PROPERTIES,
@@ -100,6 +101,10 @@ __all__ = [
     "MigrationStatus",
     # Network
     "format_connection_error",
+    # Backup
+    "BackupTarget",
+    "get_backup_targets",
+    "clear_backup_cache",
 ]
 
 if fetch_text is not None:
