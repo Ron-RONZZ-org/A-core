@@ -910,6 +910,58 @@ for m in results:
     print(m["name"], m["description"][:60])
 ```
 
+### Backup Targets (`A.core.backup_targets`)
+
+Pluggable backup discovery for A-sekurkopio. Each A-module registers
+its database files via the ``A.backup`` entry point group, and
+``get_backup_targets()`` collects them all using entry-point discovery
+plus a convention-based scan of ``data_dir()`` for unregistered modules.
+
+| Function / Class | Returns | Description |
+|------------------|---------|-------------|
+| `BackupTarget` | dataclass | A file to back up: ``path``, ``category`` (``"data"``/``"config"``), ``module``, ``label`` |
+| `get_backup_targets(*, include_data_dir_scan=True) -> list[BackupTarget]` | All targets | Discover via entry points + scan |
+| `clear_cache() -> None` | — | Clear cached targets (for testing) |
+
+**Module registration (``pyproject.toml``):**
+```toml
+[project.entry-points."A.backup"]
+vorto = "A_vorto.data.storage:get_backup_targets"
+```
+
+**Module factory function:**
+```python
+from A.core.backup_targets import BackupTarget
+
+def get_backup_targets() -> list[BackupTarget]:
+    return [
+        BackupTarget(
+            path=_DB_FILE,
+            category="data",
+            module="vorto",
+            label="Vorto database",
+        ),
+    ]
+```
+
+**Consumption by A-sekurkopio:**
+```python
+from A.core.backup_targets import get_backup_targets
+
+targets = get_backup_targets()
+for t in targets:
+    print(t.path)  # All discovered files
+```
+
+**Error handling:**
+| Scenario | Behavior |
+|----------|----------|
+| Module not installed | Entry point not found — silently skipped |
+| Module installed, no entry point | Caught by ``data_dir()`` scan fallback |
+| Module factory raises | Caught by try/except — other modules unaffected |
+| Config-dir DBs (A-sistemo) | Entry point returns ``category="config"`` — entry point required |
+
+
 ### Interactive Selection (`A.utils.interactive`)
 
 Generic "show numbered table → prompt for selection" pattern extracted from A-encik.
