@@ -289,3 +289,20 @@ class TestEdgeCases:
         names = {t.module for t in targets}
         assert "vorto" in names
         assert "medio" in names
+
+    def test_path_dedup_ep_vs_scan(self, tmp_path: Path) -> None:
+        """Same file discovered by EP + scan with *different module names* deduplicates by path."""
+        db = _make_fake_db(tmp_path, "A-modulo", "modulo.db")
+        # EP name "modulo" ≠ scan-derived name "A-modulo" — module-based dedup would miss this
+        ep_factory = lambda: [BackupTarget(path=db, module="modulo", label="EP")]
+        with patch.object(
+            importlib.metadata,
+            "entry_points",
+            return_value=[_FakeEntryPoint("modulo", ep_factory)],
+        ):
+            targets = get_backup_targets()
+        # Should be exactly 1 target for this file despite EP + scan + different module names
+        modulo_targets = [t for t in targets if t.path.resolve() == db.resolve()]
+        assert len(modulo_targets) == 1, f"Expected 1, got {len(modulo_targets)}: {modulo_targets}"
+        assert modulo_targets[0].module == "modulo", "EP target should take precedence"
+        assert modulo_targets[0].label == "EP"

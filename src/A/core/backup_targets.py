@@ -151,7 +151,16 @@ def get_backup_targets(
     if include_data_dir_scan:
         scanned = _scan_data_dir(claimed_modules)
 
-    _backup_targets = ep_targets + scanned
+    # Deduplicate by resolved path — entry-point targets take precedence
+    seen: set[Path] = set()
+    deduped: list[BackupTarget] = []
+    for t in ep_targets + scanned:
+        resolved = t.path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            deduped.append(t)
+
+    _backup_targets = deduped
     return _backup_targets
 
 
