@@ -329,7 +329,23 @@ from A.core import (
 | `config_dir() -> Path` | `~/.config/A` | User config directory |
 | `cache_dir() -> Path` | `~/.cache/A` | User cache directory |
 | `state_dir() -> Path` | `~/.local/state/A` | User state directory |
-$1
+
+All four functions respect the ``A_DIR`` environment variable. When set,
+paths resolve under ``$A_DIR / {data,config,cache,state}`` instead of
+the XDG defaults.
+
+**``A_DIR`` env var:**
+- Empty/whitespace-only values are treated as unset (falls back to XDG)
+- Relative paths are resolved to absolute at call time
+- Evaluated lazily on every call — changing ``A_DIR`` between calls works
+- ``ensure_dirs()`` creates directories under the override when set
+
+**Example override:**
+```bash
+export A_DIR=/tmp/my-project
+python -c "from A.core.paths import data_dir; print(data_dir())"
+# => /tmp/my-project/data
+```
 
 **`ensure_dirs` usage:**
 ```python
@@ -342,6 +358,10 @@ ensure_dirs()
 my_data_dir = data_dir() / "my_plugin"
 ensure_dirs(my_data_dir)
 ```
+
+**Testing utility:** ``A.core.testing.patch_paths(monkeypatch, tmp_path)``
+sets ``A_DIR`` to redirect all paths under a temporary directory —
+simplified from 4 monkeypatches to 1 ``setenv``.
 
 ### i18n (`A.core.i18n`)
 
