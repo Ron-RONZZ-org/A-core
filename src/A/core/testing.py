@@ -23,28 +23,22 @@ import pytest
 def patch_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Redirect all A-core path functions to *tmp_path* subdirectories.
 
-    Call this **first** in your autouse fixture, before any module imports
-    that rely on resolved paths.  Handles the absence of ``@lru_cache``:
-    the original functions are simply replaced in the ``A.core.paths``
-    namespace.
-
-    Created subdirectories under *tmp_path*:
+    Sets the ``A_DIR`` environment variable so that every path function
+    returns a subdirectory under *tmp_path*:
 
     ============= ==================
-    Function      Redirected to
+    Function      Under ``A_DIR``
     ============= ==================
     ``data_dir``  ``tmp_path / "data"``
     ``config_dir`` ``tmp_path / "config"``
     ``cache_dir`` ``tmp_path / "cache"``
     ``state_dir`` ``tmp_path / "state"``
     ============= ==================
-    """
-    import A.core.paths as core_paths
 
-    monkeypatch.setattr(core_paths, "data_dir", lambda: tmp_path / "data")
-    monkeypatch.setattr(core_paths, "config_dir", lambda: tmp_path / "config")
-    monkeypatch.setattr(core_paths, "cache_dir", lambda: tmp_path / "cache")
-    monkeypatch.setattr(core_paths, "state_dir", lambda: tmp_path / "state")
+    Subdirectories are **not** pre-created (matches the lazy contract of
+    :func:`A.core.paths.ensure_dirs`).
+    """
+    monkeypatch.setenv("A_DIR", str(tmp_path))
 
 
 def patch_keyring(monkeypatch: pytest.MonkeyPatch) -> None:
