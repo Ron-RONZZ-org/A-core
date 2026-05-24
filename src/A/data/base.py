@@ -1,5 +1,6 @@
 """SQLite base for A data layer."""
 
+import atexit
 import json
 import shutil
 import sqlite3
@@ -43,9 +44,28 @@ class SQLiteDB:
         if schema:
             self._init_schema()
 
+        # Best-effort WAL checkpoint on clean exit (Ctrl+C, normal exit, etc.)
+        atexit.register(self._cleanup)
+
+    def _cleanup(self) -> None:
+        """atexit handler: checkpoint and close if DB file still exists.
+
+        Guards against test-isolation scenarios where the database file
+        in ``tmp_path`` has already been cleaned up by pytest fixture
+        teardown before atexit runs.
+        """
+        if not self.path.exists():
+            return
+        self.close()
+
     def close(self) -> None:
-        """Close the cached connection, if open. Idempotent."""
+        """Checkpoint WAL and close connection. Idempotent."""
         if self._conn is not None:
+            try:
+                # PASSIVE checkpoint: non-blocking, safe with concurrent access.
+                self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            except Exception:
+                pass  # Best-effort: next open recovers WAL automatically
             try:
                 self._conn.close()
             except Exception:
