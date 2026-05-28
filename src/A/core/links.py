@@ -5,6 +5,9 @@ When entry A links to entry B, the link is stored and queryable
 in both directions (outgoing from A, incoming to B).
 """
 
+import functools
+import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterator
@@ -32,6 +35,43 @@ LINKS_SCHEMA = {
 }
 
 
+def _retry_on_lock(
+    retries: int = 3,
+    base_delay: float = 0.5,
+):
+    """Decorator: retry a method on ``sqlite3.OperationalError`` (DB locked).
+
+    Closes and invalidates the cached DB connection before each retry so
+    that the next attempt acquires a fresh connection.
+
+    Args:
+        retries: Max retries (default 3, for 4 total attempts).
+        base_delay: Initial delay in seconds (doubles each attempt).
+    """
+
+    def decorator(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            last_exc = None
+            for attempt in range(retries + 1):
+                try:
+                    return method(self, *args, **kwargs)
+                except sqlite3.OperationalError as exc:
+                    last_exc = exc
+                    # Close broken connection so next attempt creates a new one
+                    self.close()
+                    if attempt < retries:
+                        delay = base_delay * (2**attempt)
+                        time.sleep(delay)
+            raise RuntimeError(
+                f"Database locked after {retries + 1} attempts ({retries} retries)"
+            ) from last_exc
+
+        return wrapper
+
+    return decorator
+
+
 @dataclass
 class Link:
     """Represents a directed link between two entries."""
@@ -52,6 +92,7 @@ class LinksDB(SQLiteDB):
     def __init__(self):
         super().__init__(LINKS_DB, LINKS_SCHEMA)
     
+    @_retry_on_lock()
     def add_link(
         self,
         source_type: str,
@@ -89,7 +130,57 @@ class LinksDB(SQLiteDB):
         except Exception:
             # Already exists or other error
             return None
+
+    @_retry_on_lock()
+    def bulk_add_links(
+        self,
+        links: list[tuple[str, str, str, str]],
+        source_type_default: str | None = None,
+        target_type_default: str | None = None,
+    ) -> int:
+        """Add multiple links in a single transaction (batch insert).
+
+        Self-links (same source and target ID) are silently skipped.
+
+        Args:
+            links: Each tuple is ``(source_id, target_id)`` or
+                   ``(source_type, source_id, target_type, target_id)``.
+                   If 2-tuples are given, ``source_type_default`` and
+                   ``target_type_default`` are used.
+            source_type_default: Default source type for 2-tuple entries.
+            target_type_default: Default target type for 2-tuple entries.
+
+        Returns:
+            Number of links actually inserted.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        rows: list[tuple[str, str, str, str, str]] = []
+        for entry in links:
+            if len(entry) == 2:
+                sid, tid = entry
+                st = source_type_default or "vorto"
+                tt = target_type_default or "vorto"
+            else:
+                st, sid, tt, tid = entry
+            if sid != tid:
+                rows.append((st, sid, tt, tid, now))
+
+        if not rows:
+            return 0
+
+        with self._connection() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO links
+                    (source_type, source_id, target_type, target_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            conn.commit()
+            return conn.total_changes
     
+    @_retry_on_lock()
     def remove_link(
         self,
         source_type: str,
@@ -217,6 +308,7 @@ class LinksDB(SQLiteDB):
         )
         return result is not None
     
+    @_retry_on_lock()
     def remove_all_for_entry(
         self,
         entry_type: str,
@@ -328,6 +420,19 @@ def add_link(
 ) -> Link | None:
     """Add a bidirectional link."""
     return get_links_db().add_link(source_type, source_id, target_type, target_id)
+
+
+def bulk_add_links(
+    links: list[tuple[str, str, str, str]],
+    source_type_default: str | None = None,
+    target_type_default: str | None = None,
+) -> int:
+    """Add multiple links in a single transaction."""
+    return get_links_db().bulk_add_links(
+        links,
+        source_type_default=source_type_default,
+        target_type_default=target_type_default,
+    )
 
 
 def remove_link(

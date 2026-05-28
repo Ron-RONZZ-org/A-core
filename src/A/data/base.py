@@ -77,7 +77,7 @@ class SQLiteDB:
         if self._conn is None:
             # 5-second busy timeout: retry locked databases instead of
             # immediately raising "database is locked"
-            self._conn = sqlite3.connect(self.path, timeout=5.0)
+            self._conn = sqlite3.connect(self.path, timeout=10.0)
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             # Keep WAL small: auto-checkpoint every 100 pages (~400KB)
@@ -111,7 +111,7 @@ class SQLiteDB:
         try:
             yield conn
         finally:
-            pass  # Connection is cached; don't close
+            pass  # Connection is cached; don't close  # Connection is cached; don't close
 
     def execute(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
         """Execute SQL and return results as dicts.

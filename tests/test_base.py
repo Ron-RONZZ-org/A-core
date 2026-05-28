@@ -6,7 +6,7 @@ import pytest
 
 
 def test_sqlitedb_connection_timeout():
-    """SQLiteDB creates connections with a 5-second busy timeout.
+    """SQLiteDB creates connections with a 10-second busy timeout.
 
     The ``timeout`` parameter to ``sqlite3.connect()`` sets the
     ``busy_timeout`` PRAGMA, which makes SQLite retry locked databases
@@ -25,8 +25,8 @@ def test_sqlitedb_connection_timeout():
 
         # Verify the timeout was set: PRAGMA busy_timeout returns ms
         (timeout_ms,) = conn.execute("PRAGMA busy_timeout").fetchone()
-        assert timeout_ms == 5000, (
-            f"Expected busy_timeout=5000ms, got {timeout_ms}"
+        assert timeout_ms == 10000, (
+            f"Expected busy_timeout=10000ms, got {timeout_ms}"
         )
 
         db.close()
