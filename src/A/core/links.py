@@ -36,17 +36,21 @@ LINKS_SCHEMA = {
 
 
 def _retry_on_lock(
-    retries: int = 3,
+    retries: int = 10,
     base_delay: float = 0.5,
+    max_delay: float = 10.0,
 ):
     """Decorator: retry a method on ``sqlite3.OperationalError`` (DB locked).
 
-    Closes and invalidates the cached DB connection before each retry so
-    that the next attempt acquires a fresh connection.
+    Does **not** close the cached connection — a busy timeout does not
+    corrupt it.  The same connection is reused for each retry, and SQLite's
+    internal busy handler exits as soon as the lock is released (not after
+    the full timeout).
 
     Args:
-        retries: Max retries (default 3, for 4 total attempts).
+        retries: Max retries (default 10, for 11 total attempts).
         base_delay: Initial delay in seconds (doubles each attempt).
+        max_delay: Cap for exponential backoff (default 10s).
     """
 
     def decorator(method):
@@ -58,14 +62,14 @@ def _retry_on_lock(
                     return method(self, *args, **kwargs)
                 except sqlite3.OperationalError as exc:
                     last_exc = exc
-                    # Close broken connection so next attempt creates a new one
-                    self.close()
                     if attempt < retries:
-                        delay = base_delay * (2**attempt)
+                        delay = min(max_delay, base_delay * (2**attempt))
                         time.sleep(delay)
-            raise RuntimeError(
-                f"Database locked after {retries + 1} attempts ({retries} retries)"
-            ) from last_exc
+            msg = (
+                f"Database locked after {retries + 1} attempts ({retries} retries). "
+                f"Close other A terminals and try again."
+            )
+            raise RuntimeError(msg) from last_exc
 
         return wrapper
 
