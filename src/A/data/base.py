@@ -84,6 +84,12 @@ class SQLiteDB:
             # instead of the default 1000 pages (~4MB). Frequent small
             # checkpoints avoid long stalls during read operations.
             self._conn.execute("PRAGMA wal_autocheckpoint=100")
+            # Clean up stale WAL/SHM files from crashed processes.
+            # TRUNCATE checkpoint removes the -wal and -shm files,
+            # preventing phantom "database locked" errors.
+            self._conn.execute(
+                "PRAGMA wal_checkpoint(TRUNCATE)"
+            )
             self._conn.row_factory = sqlite3.Row
         return self._conn
 

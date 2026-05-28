@@ -6,6 +6,7 @@ in both directions (outgoing from A, incoming to B).
 """
 
 import functools
+import random
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -36,9 +37,10 @@ LINKS_SCHEMA = {
 
 
 def _retry_on_lock(
-    retries: int = 10,
+    retries: int = 20,
     base_delay: float = 0.5,
     max_delay: float = 10.0,
+    jitter: float = 0.3,
 ):
     """Decorator: retry a method on ``sqlite3.OperationalError`` (DB locked).
 
@@ -47,10 +49,15 @@ def _retry_on_lock(
     internal busy handler exits as soon as the lock is released (not after
     the full timeout).
 
+    Uses **jittered exponential backoff** so that two A processes retrying
+    at the same time do not stay synchronized and keep colliding.
+
     Args:
-        retries: Max retries (default 10, for 11 total attempts).
+        retries: Max retries (default 20, for 21 total attempts).
         base_delay: Initial delay in seconds (doubles each attempt).
         max_delay: Cap for exponential backoff (default 10s).
+        jitter: Random fraction added/removed from delay (default 0.3,
+                giving 70-130 % of the nominal delay).
     """
 
     def decorator(method):
@@ -63,10 +70,13 @@ def _retry_on_lock(
                 except sqlite3.OperationalError as exc:
                     last_exc = exc
                     if attempt < retries:
-                        delay = min(max_delay, base_delay * (2**attempt))
+                        nominal = min(max_delay, base_delay * (2**attempt))
+                        # Jitter: random fraction of nominal around 1.0
+                        factor = 1.0 + jitter * (2.0 * random.random() - 1.0)
+                        delay = nominal * factor
                         time.sleep(delay)
             msg = (
-                f"Database locked after {retries + 1} attempts ({retries} retries). "
+                f"links.db locked after {retries + 1} attempts ({retries} retries). "
                 f"Close other A terminals and try again."
             )
             raise RuntimeError(msg) from last_exc
