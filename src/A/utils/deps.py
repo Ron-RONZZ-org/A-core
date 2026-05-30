@@ -41,6 +41,7 @@ def ensure_dependency(
     package: Optional[str] = None,
     *,
     auto_install: bool = True,
+    timeout: float = 120,
 ) -> None:
     """Ensure a Python dependency is available, auto-installing if needed.
 
@@ -52,6 +53,8 @@ def ensure_dependency(
         package: pip package name (defaults to *module*).
         auto_install: If True (default), prompt user to install interactively.
                       If False, raise :exc:`ImportError` immediately.
+        timeout: Maximum time in seconds for the install subprocess
+                 (default 120). Passed to :func:`subprocess.run`.
 
     Raises:
         ImportError: If module not found and install was declined or failed.
@@ -95,22 +98,45 @@ def ensure_dependency(
 
     try:
         pip_cmd = get_pip_command()
-        subprocess.check_call(
+        completed = subprocess.run(
             pip_cmd + ["install", package],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
+        if completed.returncode != 0:
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                completed.args,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
         importlib.invalidate_caches()
         importlib.import_module(module)
-    except Exception as e:
+    except subprocess.TimeoutExpired:
         error(
             tr_multi(
-                f"Instalo de '{package}' malsukcesis: {e}",
-                f"Installation of '{package}' failed: {e}",
-                f"L'installation de '{package}' a échoué : {e}",
+                f"Instalado de '{package}' tempis (>{timeout}s).",
+                f"Installation of '{package}' timed out (>{timeout}s).",
+                f"L'installation de '{package}' a expiré (>{timeout}s).",
             )
         )
-        raise ImportError(f"Failed to install {package}: {e}") from e
+        raise ImportError(
+            f"Failed to install {package}: timed out after {timeout}s"
+        )
+    except Exception as e:
+        stderr_hint = ""
+        if isinstance(e, subprocess.CalledProcessError) and e.stderr:
+            stderr_hint = e.stderr.strip()[:500]
+        detail = f": {stderr_hint}" if stderr_hint else ""
+        error(
+            tr_multi(
+                f"Instalo de '{package}' malsukcesis{detail}",
+                f"Installation of '{package}' failed{detail}",
+                f"L'installation de '{package}' a échoué{detail}",
+            )
+        )
+        raise ImportError(f"Failed to install {package}{detail}") from e
 
 
 __all__ = ["get_pip_command", "ensure_dependency"]
