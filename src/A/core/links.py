@@ -90,6 +90,49 @@ class LinksDB(SQLiteDB):
             # Already exists or other error
             return None
     
+    def bulk_add_links(
+        self,
+        pairs: list[tuple[str, str]],
+        source_type_default: str = "vorto",
+        target_type: str | None = None,
+    ) -> int:
+        """Add multiple links in a single transaction.
+
+        Args:
+            pairs: List of ``(source_id, target_id)`` tuples.
+            source_type_default: Entry type for source & target
+                                 (default ``"vorto"``).
+            target_type: Entry type for the target.
+                         Defaults to ``source_type_default``.
+
+        Returns:
+            Number of links actually inserted (skips self-links
+            and duplicate violations).
+        """
+        target_type = target_type or source_type_default
+        now = datetime.now(timezone.utc).isoformat()
+        count = 0
+
+        with self._connection() as conn:
+            for source_id, target_id in pairs:
+                if source_id == target_id:
+                    continue  # Don't link to self
+                try:
+                    conn.execute(
+                        """
+                        INSERT INTO links
+                            (source_type, source_id, target_type, target_id, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (source_type, source_id, target_type, target_id, now),
+                    )
+                    count += 1
+                except Exception:
+                    continue  # UNIQUE constraint or other
+            conn.commit()
+
+        return count
+
     def remove_link(
         self,
         source_type: str,
@@ -388,3 +431,23 @@ def get_linked_entries(
 ) -> dict[str, list[str]]:
     """Get all linked entry IDs."""
     return get_links_db().get_linked_entries(entry_type, entry_id)
+
+
+def bulk_add_links(
+    pairs: list[tuple[str, str]],
+    source_type_default: str = "vorto",
+    target_type: str | None = None,
+) -> int:
+    """Add multiple links in batch.
+
+    Args:
+        pairs: List of ``(source_id, target_id)`` tuples.
+        source_type_default: Entry type for source & target
+                             (default ``"vorto"``).
+        target_type: Entry type for the target.
+                     Defaults to ``source_type_default``.
+
+    Returns:
+        Number of links actually inserted.
+    """
+    return get_links_db().bulk_add_links(pairs, source_type_default, target_type)
