@@ -4,6 +4,7 @@ import atexit
 import json
 import shutil
 import sqlite3
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Any
@@ -12,18 +13,23 @@ from A.core.paths import data_dir
 
 
 class SQLiteDB:
-    """Base SQLite database with WAL mode and connection caching.
+    """Base SQLite database with WAL mode and thread-safe connection caching.
 
-    Connection is lazily created on first query and reused for all subsequent
-    queries within the same SQLiteDB instance. This avoids the overhead of
-    opening/closing a sqlite3 connection on every ``execute()`` call, which
-    is critical for CLI tools that issue many small queries (e.g. resolving
-    linked entry titles).
+    Connections are cached per-thread via ``threading.local``, so each thread
+    gets its own ``sqlite3.Connection``.  This avoids the
+    ``ProgrammingError: SQLite objects created in a thread can only be used
+    in that same thread`` when the same ``SQLiteDB`` instance is accessed
+    from multiple threads (e.g. via ``ThreadPoolExecutor``).
 
-    Call :meth:`close()` to explicitly release the cached connection.
+    Within a single thread, the connection is lazily created on first query
+    and reused for all subsequent queries, avoiding the overhead of
+    opening/closing a ``sqlite3`` connection on every ``execute()`` call.
+
+    Call :meth:`close()` to explicitly release the calling thread's cached
+    connection.  The ``atexit`` handler (best-effort) only closes the main
+    thread's connection; other threads' connections are released when the
+    thread-local storage is cleared at thread exit.
     """
-
-    _conn: sqlite3.Connection | None = None
 
     def __init__(self, name_or_path: str | Path, schema: dict[str, str] = None):
         """
@@ -36,6 +42,7 @@ class SQLiteDB:
         else:
             self.path = data_dir() / f"{name_or_path}.db"
         self._schema = schema or {}
+        self._local = threading.local()
 
         # Ensure parent directory exists
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +57,10 @@ class SQLiteDB:
     def _cleanup(self) -> None:
         """atexit handler: checkpoint and close if DB file still exists.
 
+        Only closes the main thread's connection (the thread atexit runs in).
+        Worker threads' connections are released when thread-local storage is
+        cleared at thread exit.
+
         Guards against test-isolation scenarios where the database file
         in ``tmp_path`` has already been cleaned up by pytest fixture
         teardown before atexit runs.
@@ -59,33 +70,36 @@ class SQLiteDB:
         self.close()
 
     def close(self) -> None:
-        """Checkpoint WAL and close connection. Idempotent."""
-        if self._conn is not None:
+        """Checkpoint WAL and close the calling thread's connection. Idempotent."""
+        conn = getattr(self._local, "_conn", None)
+        if conn is not None:
             try:
                 # PASSIVE checkpoint: non-blocking, safe with concurrent access.
-                self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
             except Exception:
                 pass  # Best-effort: next open recovers WAL automatically
             try:
-                self._conn.close()
+                conn.close()
             except Exception:
                 pass
-            self._conn = None
+            self._local._conn = None
 
     def _get_conn(self) -> sqlite3.Connection:
-        """Get or create a cached connection with WAL mode."""
-        if self._conn is None:
+        """Get or create a per-thread cached connection with WAL mode."""
+        conn = getattr(self._local, "_conn", None)
+        if conn is None:
             # 5-second busy timeout: retry locked databases instead of
             # immediately raising "database is locked"
-            self._conn = sqlite3.connect(self.path, timeout=5.0)
-            self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA foreign_keys=ON")
+            conn = sqlite3.connect(self.path, timeout=5.0)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
             # Keep WAL small: auto-checkpoint every 100 pages (~400KB)
             # instead of the default 1000 pages (~4MB). Frequent small
             # checkpoints avoid long stalls during read operations.
-            self._conn.execute("PRAGMA wal_autocheckpoint=100")
-            self._conn.row_factory = sqlite3.Row
-        return self._conn
+            conn.execute("PRAGMA wal_autocheckpoint=100")
+            conn.row_factory = sqlite3.Row
+            self._local._conn = conn
+        return conn
 
     def _init_schema(self) -> None:
         """Initialize database schema if tables don't exist."""
