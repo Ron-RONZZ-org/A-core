@@ -63,7 +63,7 @@ class TestEnsureDependency:
         from A.utils.deps import ensure_dependency
         with (
             patch.object(importlib, "import_module", side_effect=self._fail_for_fake),
-            patch("typer.confirm", return_value=False),
+            patch("A.confirm_action", return_value=False),
         ):
             with pytest.raises(ImportError, match="not installed"):
                 ensure_dependency(_FAKE_MODULE)
@@ -94,7 +94,7 @@ class TestEnsureDependency:
 
         with (
             patch.object(importlib, "import_module", side_effect=_import),
-            patch("typer.confirm", return_value=True),
+            patch("A.confirm_action", return_value=True),
             # Mock get_pip_command to return a predictable command
             patch("A.utils.deps.get_pip_command", return_value=["echo"]),
             # Patch subprocess.run at the A.utils.deps level to avoid circular import issues
@@ -118,7 +118,7 @@ class TestEnsureDependency:
         from A.utils.deps import ensure_dependency
         with (
             patch.object(importlib, "import_module", side_effect=self._fail_for_fake),
-            patch("typer.confirm", return_value=True),
+            patch("A.confirm_action", return_value=True),
             patch("A.utils.deps.get_pip_command", return_value=["echo"]),
             patch("A.utils.deps.subprocess.run") as mock_run,
         ):
@@ -135,7 +135,7 @@ class TestEnsureDependency:
         from A.utils.deps import ensure_dependency
         with (
             patch.object(importlib, "import_module", side_effect=self._fail_for_fake),
-            patch("typer.confirm", return_value=True),
+            patch("A.confirm_action", return_value=True),
             patch("A.utils.deps.get_pip_command", return_value=["echo"]),
             patch("A.utils.deps.subprocess.run", side_effect=subprocess.TimeoutExpired(
                 cmd=["echo", "install", "bigpkg"], timeout=30,
@@ -162,7 +162,7 @@ class TestEnsureDependency:
 
         with (
             patch.object(importlib, "import_module", side_effect=_import),
-            patch("typer.confirm", return_value=True),
+            patch("A.confirm_action", return_value=True),
             patch("A.utils.deps.get_pip_command", return_value=["uv", "pip"]),
             patch("A.utils.deps.subprocess.run") as mock_run,
         ):

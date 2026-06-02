@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.metadata
 
+import click
 import typer
 
 from A import error
@@ -22,7 +23,7 @@ _PLUGIN_ENTRY_POINTS: dict[str, importlib.metadata.EntryPoint] = {}
 def discover_plugin_names() -> dict[str, importlib.metadata.EntryPoint]:
     """Discover plugin entry points without loading them.
 
-    Returns: dict mapping plugin name → EntryPoint
+    Returns: dict mapping plugin name -> EntryPoint
     """
     try:
         eps = importlib.metadata.entry_points(group="A.commands")
@@ -121,11 +122,17 @@ class LazyPluginGroup(typer.main.TyperGroup):
     Plugins are not imported at startup — only when the user runs a command
     that belongs to that plugin. Failed loads are silently dropped from the
     command list.
+
+    Also patches ``info_name`` on sub-commands after lazy-loading (#15
+    sub-issue 4).  When a plugin is lazy-loaded and added via
+    ``add_command()``, its sub-commands lose the full path context (e.g.
+    ``A aldoni`` instead of ``A vorto aldoni``).  The ``_patch_info_name``
+    helper recursively fixes this.
     """
 
     def get_command(
         self, ctx: typer.Context, cmd_name: str
-    ) -> typer.main.TyperGroup | None:
+    ) -> click.Command | None:
         # Already loaded (built-in command or previously cached)?
         cmd = super().get_command(ctx, cmd_name)
         if cmd is not None:
@@ -136,6 +143,7 @@ class LazyPluginGroup(typer.main.TyperGroup):
             click_cmd = load_plugin(cmd_name)
             if click_cmd is not None:
                 self.add_command(click_cmd, name=cmd_name)
+                self._patch_info_name(click_cmd, cmd_name)
                 return click_cmd
             # Load failed — remove so we don't try again
             _PLUGIN_ENTRY_POINTS.pop(cmd_name, None)
@@ -148,6 +156,20 @@ class LazyPluginGroup(typer.main.TyperGroup):
             if name not in cmds:
                 cmds.append(name)
         return [c for c in cmds if not c.startswith("_")]
+
+    @staticmethod
+    def _patch_info_name(cmd: click.Command, parent_path: str) -> None:
+        """Recursively patch ``info_name`` to include the full command path.
+
+        When a plugin is lazy-loaded and added via ``add_command()``, its
+        sub-commands (e.g. ``aldoni``) only know their own name, not the
+        path ``vorto aldoni``.  This helper propagates the parent path down
+        so that ``--help`` output shows the correct full usage line.
+        """
+        cmd.info_name = f"{parent_path} {cmd.name}" if parent_path else (cmd.name or "")
+        if isinstance(cmd, click.Group):
+            for sub in cmd.commands.values():
+                LazyPluginGroup._patch_info_name(sub, cmd.info_name)
 
 
 __all__ = [

@@ -71,11 +71,10 @@ def ensure_dependency(
             raise
 
     # Interactive install path (lazy imports to avoid circular deps)
-    import typer
-    from A import tr_multi
+    from A import confirm_action, tr_multi
     from A.utils.output import info, error
 
-    answer = typer.confirm(
+    answer = confirm_action(
         tr_multi(
             f"Bezonas '{package}' bibliotekon. Ĉu instali ĝin nun?",
             f"The '{package}' library is required. Install it now?",
