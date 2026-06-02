@@ -48,26 +48,32 @@ _STANDARD_FIELDS: tuple[str, ...] = (
 
 
 def load_profile() -> dict[str, Any]:
-    """Load user profile from config settings.
+    """Load user profile from the ``[uzanto]`` config section.
 
     Returns:
         Dict of profile fields (may be empty if none configured).
     """
     cfg = load_config()
-    return dict(cfg.settings)
+    # New format: top-level [uzanto] section
+    return dict(cfg.module_settings.get("uzanto", {}))
 
 
 def save_profile(profile: dict[str, Any]) -> None:
-    """Persist user profile to config settings.
+    """Persist user profile to the ``[uzanto]`` config section.
 
-    Replaces the entire settings dict with the given profile data.
+    Only touches the ``[uzanto]`` section — does **not** wipe other
+    module settings (fixes pre-existing bug that destroyed plugin config).
 
     Args:
         profile: Dict of profile fields to persist.
     """
     cfg = load_config()
-    cfg.settings.clear()
-    cfg.settings.update(profile)
+    # Only write to [uzanto] section
+    cfg.module_settings["uzanto"] = dict(profile)
+    # Clean up any legacy dot-notation keys that were migrated
+    for key in list(cfg.settings):
+        if key.startswith("uzanto."):
+            del cfg.settings[key]
     save_config(cfg)
 
 

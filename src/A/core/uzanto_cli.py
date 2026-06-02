@@ -21,16 +21,32 @@ from rich.box import SIMPLE as BOX_SIMPLE
 from A import tr, tr_multi
 from A.console import console
 from A.utils import info, error, success
-from A.core.config import load_config, save_config
+from A.utils.editor import edit_file
+from A.core.config import load_config, save_config, register_module_defaults, get_module_setting, set_module_setting
 from A.core.paths import config_dir
 from A.core.uzanto_service import (
-    load_profile, save_profile,
+    load_profile,
     get_master_password, set_master_password, delete_master_password,
-    get_huggingface_api_key, set_huggingface_api_key,
+    get_huggingface_api_key,
     encrypt_profile, decrypt_profile,
-    validate_date, normalize_multi_contact,
     display_value, mask_api_key, _STANDARD_FIELDS,
 )
+
+# Register uzanto config defaults so they appear as commented-out
+# keys in the user's config.toml on first run.
+register_module_defaults("uzanto", {
+    "nomo":               ("", "Your given name"),
+    "familia_nomo":       ("", "Your family name"),
+    "naskig_dato":        ("", "Birth date (YYYY-MM-DD)"),
+    "naskig_loko":        ("", "Place of birth"),
+    "lingvo":             ("eo", "Interface language (eo/en/fr)"),
+    "lingvoj":            (["eo"], "Languages you speak"),
+    "organizo":           ("", "Organisation name"),
+    "organiza_identiga_numero": ("", "Organisation ID number"),
+    "telefonnumeroj":     ([], "Phone numbers (00<country><number>)"),
+    "retposhtadresoj":    ([], "Email addresses"),
+    "api_slosilo_huggingface": ("", "HuggingFace API key"),
+})
 
 _H = tr_multi  # short alias for the help-text helper
 app = typer.Typer(
@@ -86,134 +102,34 @@ def vidi() -> None:
 
 
 @app.command("modifi")
-def modifi(
-    lingvo: Optional[str] = typer.Option(None, "--lingvo", "-l",
-        help=_H("Lingva kodo (ekz: eo,en,fr)", "Language code (eo,en,fr)", "Code langue (ex: eo,en,fr)")),
-    nomo: Optional[str] = typer.Option(None, "--nomo", "-n",
-        help=_H("Nomo", "First name", "Prénom")),
-    familia_nomo: Optional[str] = typer.Option(None, "--familia-nomo", "-fn",
-        help=_H("Familia nomo", "Family name", "Nom famille")),
-    naskig_dato: Optional[str] = typer.Option(None, "--naskig-dato", "-nd",
-        help=_H("Naskiĝdato (YYYY-MM-DD)", "Birth date (YYYY-MM-DD)", "Date naissance (AAAA-MM-JJ)")),
-    naskig_loko: Optional[str] = typer.Option(None, "--naskig-loko", "-nl",
-        help=_H("Naskiĝloko", "Place of birth", "Lieu naissance")),
-    lingvoj: Optional[str] = typer.Option(None, "--lingvoj", "-L",
-        help=_H("Lingvoj (komo-disigitaj)", "Languages (comma-sep.)", "Langues (séparées par virgules)")),
-    organizo: Optional[str] = typer.Option(None, "--organizo", "-o",
-        help=_H("Organizo", "Organization", "Organisation")),
-    organiza_identiga_numero: Optional[str] = typer.Option(None, "--organiza-identiga-numero", "-oin",
-        help=_H("Org. identiga numero", "Org. identifier", "ID organisation")),
-    telefonnumero: Optional[list[str]] = typer.Option(None, "--telefonnumero", "-tel",
-        help=_H("Tel. formato valoro:etikedo:prima (ripetebla)", "Phone value:label:primary (repeatable)", "Tél. format valeur:étiquette:primaire")),
-    retposhtadreso: Optional[list[str]] = typer.Option(None, "--retposhtadreso", "-ret",
-        help=_H("Retposhto formato adreso:etikedo:prima (ripetebla)", "Email address:label:primary (repeatable)", "Email format adresse:étiquette:primaire")),
-    api_slosilo_huggingface: Optional[str] = typer.Option(None, "--api-slosilo-huggingface", "-a",
-        help=_H("HF API-ŝlosilo (konservita en keyring)", "HF API key (stored in keyring)", "Clé API HF (stockée keyring)")),
-    kampo: Optional[list[str]] = typer.Option(None, "--kampo", "-k",
-        help=_H("Propra kampo KEY:VALUE (ripetebla)", "Custom field KEY:VALUE (repeatable)", "Champ perso CLÉ:VALEUR (répétable)")),
-) -> None:
-    """Modify user profile fields."""
-    cfg = load_config()
-    profile = load_profile()
-    changed = False
+def modifi() -> None:
+    """Edit user profile in $EDITOR.
 
-    # Language
-    if lingvo is not None:
-        if len(lingvo) != 2 or not lingvo.isalpha():
-            error(_H(f"Nevalida lingvokodo: '{lingvo}'.",
-                     f"Invalid language code: '{lingvo}'.",
-                     f"Code langue invalide : '{lingvo}'."))
-            raise typer.Exit(1)
-        cfg.language = lingvo.lower()
-        changed = True
-        info(f"language → {lingvo}")
+    Opens ``~/.config/A/config.toml`` in your preferred editor.
+    Edit the ``[uzanto]`` section directly::
 
-    # Simple string fields
-    str_fields = {
-        "nomo": nomo, "familia_nomo": familia_nomo,
-        "naskig_dato": naskig_dato, "naskig_loko": naskig_loko,
-        "organizo": organizo,
-        "organiza_identiga_numero": organiza_identiga_numero,
-    }
-    for key, val in str_fields.items():
-        if val is None:
-            continue
-        if key == "naskig_dato" and not validate_date(val):
-            error(_H(f"Nevalida dato: '{val}'. Uzu YYYY-MM-DD.",
-                     f"Invalid date: '{val}'. Use YYYY-MM-DD.",
-                     f"Date invalide : '{val}'. Utilisez AAAA-MM-JJ."))
-            raise typer.Exit(1)
-        profile[key] = val
-        changed = True
-        info(f"{key} → {val}")
+        [uzanto]
+        nomo = "Alice"
+        lingvoj = ["eo", "en"]
 
-    # Languages list
-    if lingvoj is not None:
-        codes = [c.strip().lower() for c in lingvoj.split(",") if c.strip()]
-        valid = [c for c in codes if len(c) == 2 and c.isalpha()]
-        if valid:
-            profile["lingvoj"] = valid
-            changed = True
-            info(f"lingvoj → {', '.join(valid)}")
+    Other modules also have their own sections (e.g. ``[filmeto]``)
+    with commented defaults to guide you.
 
-    # Phone numbers (structured)
-    if telefonnumero is not None:
-        try:
-            profile["telefonnumeroj"] = normalize_multi_contact(telefonnumero, kind="telefono")
-            changed = True
-            info(f"telefonnumeroj → {len(telefonnumero)} entriĝoj")
-        except ValueError as exc:
-            error(str(exc))
-            raise typer.Exit(1)
+    Set ``$EDITOR`` to choose your editor (default: vim).
+    """
+    path = _cfg_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        save_config(load_config())  # create default
 
-    # Email addresses (structured)
-    if retposhtadreso is not None:
-        try:
-            profile["retposhtadresoj"] = normalize_multi_contact(retposhtadreso, kind="retposhto")
-            changed = True
-            info(f"retposhtadresoj → {len(retposhtadreso)} entriĝoj")
-        except ValueError as exc:
-            error(str(exc))
-            raise typer.Exit(1)
-
-    # HuggingFace API key (keyring)
-    if api_slosilo_huggingface is not None:
-        if api_slosilo_huggingface.strip():
-            set_huggingface_api_key(api_slosilo_huggingface.strip())
-            profile["api_slosilo_huggingface"] = True
-            info(_H("HF API-ŝlosilo konservita.", "HF API key saved.", "Clé API HF enregistrée."))
-        else:
-            delete_master_password()
-            profile.pop("api_slosilo_huggingface", None)
-            info(_H("HF API-ŝlosilo forigita.", "HF API key removed.", "Clé API HF supprimée."))
-        changed = True
-
-    # Custom fields (kampoj)
-    if kampo:
-        if "kampoj" not in profile or not isinstance(profile["kampoj"], dict):
-            profile["kampoj"] = {}
-        for entry in kampo:
-            if ":" not in entry:
-                error(_H(f"Nevalida formato: '{entry}'. Uzu KEY:VALUE.",
-                         f"Invalid format: '{entry}'. Use KEY:VALUE.",
-                         f"Format invalide : '{entry}'. Utilisez CLÉ:VALEUR."))
-                raise typer.Exit(1)
-            k, _, v = entry.partition(":")
-            profile["kampoj"][k.strip()] = v.strip()
-            changed = True
-            info(f"kampo {k.strip()} → {v.strip()}")
-
-    if not changed:
-        info(_H("Neniuj ŝanĝoj. Uzu --help por opcioj.",
-                "No changes. Use --help for options.",
-                "Aucun changement. Utilisez --help."))
-        return
-
-    # Merge profile into cfg.settings and save once (avoids double-save bug)
-    cfg.settings.clear()
-    cfg.settings.update(profile)
-    save_config(cfg)
-    success(_H("Profilo ĝisdatigita.", "Profile updated.", "Profil mis à jour."))
+    if edit_file(path):
+        success(_H("Agordilo savita. Rekomencu se necese.",
+                   "Config saved. Restart if needed.",
+                   "Configuration enregistrée. Redémarrez si nécessaire."))
+    else:
+        error(_H("Redaktado malsukcesis aŭ nuligita.",
+                 "Edit failed or cancelled.",
+                 "Édition échouée ou annulée."))
 
 
 # ── eksporti ────────────────────────────────────────────────────────────────
@@ -297,8 +213,11 @@ def importi(
     if "language" in data:
         cfg.language = data["language"]
     if "profile" in data and isinstance(data["profile"], dict):
-        cfg.settings.clear()
-        cfg.settings.update(data["profile"])
+        cfg.module_settings["uzanto"] = dict(data["profile"])
+        # Clean up legacy dot-notation keys
+        for key in list(cfg.settings):
+            if key.startswith("uzanto."):
+                del cfg.settings[key]
     save_config(cfg)
     success(_H(f"Profielo importita el {path}", f"Profile imported from {path}", f"Profil importé depuis {path}"))
 

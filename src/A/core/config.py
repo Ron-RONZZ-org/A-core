@@ -1,9 +1,11 @@
 """Configuration loader for A."""
 
-import tomllib
+from __future__ import annotations
+
 import json
-from pathlib import Path
+import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from A.core.paths import config_dir
@@ -17,38 +19,52 @@ class Config:
     verbose: bool = False
     plugins: list[str] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)
-    settings: dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = field(default_factory=dict)  # legacy flat [A.settings]
+    module_settings: dict[str, dict[str, Any]] = field(default_factory=dict)  # new [module] sections
+
+
+def _cfg_path() -> Path:
+    return config_dir() / "config.toml"
 
 
 def load_config() -> Config:
     """Load configuration from config.toml."""
-    config_path = config_dir() / "config.toml"
-    
+    config_path = _cfg_path()
+
     if not config_path.exists():
         return Config()
-    
+
     try:
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
     except Exception as e:
         raise ConfigError(f"failed to load config: {e}") from e
-    
+
     # Support both top-level format (legacy) and [A] section
     root = data.get("A", data)
-    return Config(
+
+    config = Config(
         language=root.get("language", "eo"),
         verbose=root.get("verbose", False),
         plugins=root.get("plugins", []),
         aliases=root.get("aliases", {}),
-        settings=root.get("settings", {}),
+        settings=dict(root.get("settings", {})),
     )
+
+    # Read top-level [module] sections (everything not starting with uppercase)
+    for section, values in data.items():
+        if section == "A":
+            continue
+        if isinstance(values, dict):
+            config.module_settings[section] = dict(values)
+
+    return config
 
 
 def save_config(config: Config) -> None:
-    """Save configuration to config.toml.
+    """Save configuration to config.toml (incremental tomlkit update).
 
-    Uses tomlkit for proper TOML serialization, including nested
-    structures in the ``settings`` dict (lists, dicts, scalars).
+    Preserves comments and unknown sections via tomlkit parse-modify-write.
 
     Args:
         config: The configuration to persist.
@@ -56,50 +72,121 @@ def save_config(config: Config) -> None:
     import tomlkit
     from tomlkit import dumps
 
-    config_path = config_dir() / "config.toml"
+    config_path = _cfg_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    doc = tomlkit.document()
-    doc["A"] = tomlkit.table()
-    doc["A"]["language"] = config.language
+    # Parse existing file to preserve comments and unknown sections
+    if config_path.exists():
+        raw = config_path.read_text(encoding="utf-8")
+        doc = tomlkit.parse(raw)
+    else:
+        doc = tomlkit.document()
+
+    # ── [A] section (top-level fields) ──────────────────────────────────
+    if "A" not in doc:
+        doc["A"] = tomlkit.table()
+    a_tbl = doc["A"]
+
+    a_tbl["language"] = config.language
 
     if config.verbose:
-        doc["A"]["verbose"] = True
+        a_tbl["verbose"] = True
+    elif "verbose" in a_tbl:
+        del a_tbl["verbose"]
+
     if config.plugins:
         arr = tomlkit.array()
         for p in config.plugins:
             arr.append(p)
-        doc["A"]["plugins"] = arr
+        a_tbl["plugins"] = arr
+    elif "plugins" in a_tbl:
+        del a_tbl["plugins"]
+
     if config.aliases:
-        aliases = tomlkit.table()
+        alias_tbl = tomlkit.table()
         for k, v in config.aliases.items():
-            aliases[k] = v
-        doc["A"]["aliases"] = aliases
+            alias_tbl[k] = v
+        a_tbl["aliases"] = alias_tbl
+    elif "aliases" in a_tbl:
+        del a_tbl["aliases"]
+
+    # Legacy flat [A.settings] (keys not belonging to any module)
     if config.settings:
-        settings = tomlkit.table()
+        settings_tbl = tomlkit.table()
         for k, v in config.settings.items():
-            settings[k] = v
-        doc["A"]["settings"] = settings
+            settings_tbl[k] = v
+        a_tbl["settings"] = settings_tbl
+    elif "settings" in a_tbl:
+        del a_tbl["settings"]
 
-    config_path.write_text(dumps(doc), encoding="utf-8")
+    # ── Per-module [module] sections ────────────────────────────────────
+    for module, module_cfg in config.module_settings.items():
+        _write_module_section(doc, module, module_cfg)
+
+    # ── Clean up migrated keys from legacy [A.settings] ─────────────────
+    old_settings = a_tbl.get("settings")
+    if old_settings is not None:
+        keys_to_clean = set()
+        for module in config.module_settings:
+            prefix = f"{module}."
+            for k in list(old_settings.keys()):
+                if isinstance(k, str) and k.startswith(prefix):
+                    keys_to_clean.add(k)
+        for k in keys_to_clean:
+            del old_settings[k]
+
+    output = dumps(doc)
+    # Inject commented-default sections for newly-registered modules
+    output = _inject_missing_sections(output)
+
+    config_path.write_text(output, encoding="utf-8")
 
 
-# User profile methods
+def _write_module_section(doc: Any, module: str, settings: dict[str, Any]) -> None:
+    """Update or create a ``[module]`` section, preserving comments.
+
+    Removes any keys that exist in the file but not in *settings*
+    (full replacement of the section's values).
+    """
+    import tomlkit
+
+    if module in doc:
+        tbl = doc[module]
+    else:
+        tbl = tomlkit.table()
+        doc[module] = tbl
+
+    # Remove keys no longer present in settings
+    for k in list(tbl.keys()):
+        if k not in settings:
+            del tbl[k]
+
+    for k, v in settings.items():
+        if v is None:
+            if k in tbl:
+                del tbl[k]
+        else:
+            tbl[k] = v
+
+
+# ── User profile helpers (legacy flat API) ─────────────────────────────────
+
+
 def get_setting(key: str, default: Any = None) -> Any:
-    """Get a user setting."""
+    """Get a user setting (legacy flat ``[A.settings]``)."""
     config = load_config()
     return config.settings.get(key, default)
 
 
 def set_setting(key: str, value: Any) -> None:
-    """Set a user setting."""
+    """Set a user setting (legacy flat ``[A.settings]``)."""
     config = load_config()
     config.settings[key] = value
     save_config(config)
 
 
 def load_profile() -> dict:
-    """Load full user profile."""
+    """Load full user profile (legacy)."""
     config = load_config()
     return {
         "language": config.language,
@@ -108,7 +195,7 @@ def load_profile() -> dict:
 
 
 def save_profile(data: dict) -> None:
-    """Save full user profile."""
+    """Save full user profile (legacy)."""
     config = load_config()
     if "language" in data:
         config.language = data["language"]
@@ -132,7 +219,149 @@ def import_profile(path: Path) -> None:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ConfigSchema — per-module declarative config (issue #60)
+# Centralised module settings — new [module] section convention
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+_SENTINEL = object()
+
+
+def get_module_setting(module: str, key: str, default: Any = None) -> Any:
+    """Read a module setting from the central config.
+
+    Tries ``config[module][key]`` first (new top-level section convention).
+    Falls back to ``config["A"]["settings"][f"{module}.{key}"]`` (legacy
+    dot-notation under ``[A.settings]``).
+
+    Args:
+        module: Module name (e.g. ``"filmeto"``, ``"uzanto"``).
+        key: Setting key (e.g. ``"default_output"``).
+        default: Fallback value if the key is not set.
+
+    Returns:
+        The stored value, or *default*.
+    """
+    config = load_config()
+    # New format: top-level [module] section
+    module_cfg = config.module_settings.get(module)
+    if module_cfg is not None and key in module_cfg:
+        return module_cfg[key]
+    # Legacy fallback: dot-notation under [A.settings]
+    full_key = f"{module}.{key}"
+    return config.settings.get(full_key, default)
+
+
+def set_module_setting(module: str, key: str, value: Any) -> None:
+    """Write a module setting to the central config.
+
+    Persists to the top-level ``[module]`` section and cleans up any legacy
+    ``[A.settings]`` entry with the same ``module.key`` name.
+
+    Args:
+        module: Module name.
+        key: Setting key.
+        value: Value to store (must be TOML-serialisable).
+    """
+    config = load_config()
+    # New format: top-level [module] section
+    config.module_settings.setdefault(module, {})[key] = value
+    # Clean up legacy dot-notation key
+    config.settings.pop(f"{module}.{key}", None)
+    save_config(config)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Module config defaults — commented-out template for user discovery
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+_DEFAULT_MODULE_CONFIGS: dict[str, dict[str, Any]] = {}
+
+
+def get_module_defaults(module: str) -> dict[str, tuple[Any, str]] | None:
+    """Return the registered defaults for *module*, or ``None`` if unknown."""
+    return _DEFAULT_MODULE_CONFIGS.get(module)
+
+
+def register_module_defaults(module: str, defaults: dict[str, tuple[Any, str]]) -> None:
+    """Register module config defaults so they appear in the config file.
+
+    Called at module import time.  *defaults* maps key → (default_value, help_text).
+
+    The actual file write is deferred to :func:`save_config` which calls
+    :func:`_flush_pending_defaults` before saving. This avoids file I/O at
+    import time (safe for tests).
+    """
+    _DEFAULT_MODULE_CONFIGS[module] = dict(defaults)
+
+
+def _flush_pending_defaults(doc: Any) -> None:
+    """Append commented ``[module]`` sections for newly-registered modules.
+
+    Operates on the *parsed* tomlkit document so comments are preserved.
+    Only writes if the module's section does not yet exist.
+    """
+    from tomlkit import table as _toml_table
+
+    for module, defaults in _DEFAULT_MODULE_CONFIGS.items():
+        if module in doc:
+            continue  # Already has a section
+        # Build a commented table by appending text after the doc is dumped
+        # — handled at the string level below
+        setattr(doc, f"_pending_{module}", defaults)
+
+
+def _inject_missing_sections(raw: str) -> str:
+    """Append commented ``[module]`` sections that are not yet in *raw*.
+
+    This is a pure-string operation, done once during ``save_config``
+    before the tomlkit document is dumped.
+    """
+    if not _DEFAULT_MODULE_CONFIGS:
+        return raw
+
+    # Parse to check what's already present
+    try:
+        data = tomllib.loads(raw) if raw else {}
+    except Exception:
+        return raw  # Malformed — don't touch
+
+    lines: list[str] = []
+    for module, defaults in _DEFAULT_MODULE_CONFIGS.items():
+        if module in data:
+            continue
+        lines.append("")
+        lines.append(f"[{module}]")
+        for key, (default, help_text) in defaults.items():
+            if help_text:
+                lines.append(f"# {help_text}")
+            lines.append(f"# {key} = {_toml_literal(default)}")
+
+    if not lines:
+        return raw
+
+    return raw.rstrip() + "\n" + "\n".join(lines) + "\n"
+
+
+def _toml_literal(value: Any) -> str:
+    """Render a Python value as a TOML literal for commented defaults."""
+    if value is None:
+        return '""'
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        if not value:
+            return '""'
+        return f'"{escaped}"'
+    if isinstance(value, list):
+        items = ", ".join(_toml_literal(v) for v in value)
+        return f"[{items}]"
+    return str(value)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ConfigSchema — per-module declarative config (issue #60, legacy)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
