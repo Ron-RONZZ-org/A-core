@@ -33,32 +33,55 @@ def load_config() -> Config:
     except Exception as e:
         raise ConfigError(f"failed to load config: {e}") from e
     
+    # Support both top-level format (legacy) and [A] section
+    root = data.get("A", data)
     return Config(
-        language=data.get("language", "eo"),
-        verbose=data.get("verbose", False),
-        plugins=data.get("plugins", []),
-        aliases=data.get("aliases", {}),
-        settings=data.get("settings", {}),
+        language=root.get("language", "eo"),
+        verbose=root.get("verbose", False),
+        plugins=root.get("plugins", []),
+        aliases=root.get("aliases", {}),
+        settings=root.get("settings", {}),
     )
 
 
 def save_config(config: Config) -> None:
-    """Save configuration to config.toml."""
+    """Save configuration to config.toml.
+
+    Uses tomlkit for proper TOML serialization, including nested
+    structures in the ``settings`` dict (lists, dicts, scalars).
+
+    Args:
+        config: The configuration to persist.
+    """
+    import tomlkit
+    from tomlkit import dumps
+
     config_path = config_dir() / "config.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # TOML doesn't support dataclass, manual write
-    lines = ["[A]", f"language = \"{config.language}\""]
+
+    doc = tomlkit.document()
+    doc["A"] = tomlkit.table()
+    doc["A"]["language"] = config.language
+
     if config.verbose:
-        lines.append("verbose = true")
+        doc["A"]["verbose"] = True
     if config.plugins:
-        lines.append(f"plugins = {config.plugins}")
+        arr = tomlkit.array()
+        for p in config.plugins:
+            arr.append(p)
+        doc["A"]["plugins"] = arr
     if config.aliases:
-        lines.append("[A.aliases]")
+        aliases = tomlkit.table()
         for k, v in config.aliases.items():
-            lines.append(f'{k} = "{v}"')
-    
-    config_path.write_text("\n".join(lines) + "\n")
+            aliases[k] = v
+        doc["A"]["aliases"] = aliases
+    if config.settings:
+        settings = tomlkit.table()
+        for k, v in config.settings.items():
+            settings[k] = v
+        doc["A"]["settings"] = settings
+
+    config_path.write_text(dumps(doc), encoding="utf-8")
 
 
 # User profile methods
