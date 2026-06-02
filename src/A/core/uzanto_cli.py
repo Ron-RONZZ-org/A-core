@@ -119,8 +119,9 @@ def modifi() -> None:
     """
     path = _cfg_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        save_config(load_config())  # create default
+    # Read–save cycle: injects commented defaults for any newly-registered
+    # modules (e.g. filmeto) without altering existing values.
+    save_config(load_config())
 
     if edit_file(path):
         success(_H("Agordilo savita. Rekomencu se necese.",
