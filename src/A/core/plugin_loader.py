@@ -128,6 +128,9 @@ class LazyPluginGroup(typer.main.TyperGroup):
     ``add_command()``, its sub-commands lose the full path context (e.g.
     ``A aldoni`` instead of ``A vorto aldoni``).  The ``_patch_info_name``
     helper recursively fixes this.
+
+    Overrides ``format_commands`` to group built-in commands and installed
+    modules in separate sections in ``--help`` output.
     """
 
     def get_command(
@@ -156,6 +159,45 @@ class LazyPluginGroup(typer.main.TyperGroup):
             if name not in cmds:
                 cmds.append(name)
         return [c for c in cmds if not c.startswith("_")]
+
+    def format_commands(self, ctx: typer.Context, formatter: click.HelpFormatter) -> None:
+        """Override to separate built-in commands from plugin modules.
+
+        Built-in commands (uzanto, modulo, migri, repl, list) are shown
+        under "Built-in Commands".  Plugin modules (tempo, vorto, …) are
+        shown under "Installed Modules".
+        """
+        # Collect all commands (triggering lazy-load for plugins)
+        all_commands: list[tuple[str, click.Command]] = []
+        for subcommand in self.list_commands(ctx):
+            cmd = self.get_command(ctx, subcommand)
+            if cmd is None or cmd.hidden:
+                continue
+            all_commands.append((subcommand, cmd))
+
+        if not all_commands:
+            return
+
+        # Compute a single alignment limit for consistent column widths
+        limit = formatter.width - 6 - max(len(c[0]) for c in all_commands)
+
+        # Separate built-in vs plugin commands
+        builtins: list[tuple[str, str]] = []
+        plugins: list[tuple[str, str]] = []
+        for subcommand, cmd in all_commands:
+            help_text = cmd.get_short_help_str(limit)
+            if subcommand in _PLUGIN_ENTRY_POINTS:
+                plugins.append((subcommand, help_text))
+            else:
+                builtins.append((subcommand, help_text))
+
+        if builtins:
+            with formatter.section("Built-in Commands"):
+                formatter.write_dl(builtins)
+
+        if plugins:
+            with formatter.section("Installed Modules"):
+                formatter.write_dl(plugins)
 
     @staticmethod
     def _patch_info_name(cmd: click.Command, parent_path: str) -> None:
