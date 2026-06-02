@@ -311,12 +311,43 @@ def _flush_pending_defaults(doc: Any) -> None:
         setattr(doc, f"_pending_{module}", defaults)
 
 
+def _discover_plugin_defaults() -> None:
+    """Import config modules of all installed A-plugins to trigger registration.
+
+    Each A-module's ``config.py`` calls :func:`register_module_defaults` at
+    import time.  This function discovers all ``A.commands`` entry points and
+    imports their ``<package>.config`` submodule so those registration calls
+    happen even before the user runs any module-specific command.
+
+    Safe to call repeatedly — Python caches imported modules.
+    """
+    import importlib
+    import importlib.metadata as _imeta
+
+    try:
+        eps = _imeta.entry_points(group="A.commands")
+    except TypeError:
+        eps = _imeta.entry_points().get("A.commands", [])
+
+    for ep in eps:
+        # ep.value looks like "A_medio.cli:app" — derive package name
+        package = ep.value.split(".")[0]
+        try:
+            importlib.import_module(f"{package}.config")
+        except ImportError:
+            pass  # Module doesn't have a config.py — that's fine
+
+
 def _inject_missing_sections(raw: str) -> str:
     """Append commented ``[module]`` sections that are not yet in *raw*.
+
+    First discovers all installed plugin config modules (so their defaults
+    are registered), then appends any missing sections.
 
     This is a pure-string operation, done once during ``save_config``
     before the tomlkit document is dumped.
     """
+    _discover_plugin_defaults()
     if not _DEFAULT_MODULE_CONFIGS:
         return raw
 

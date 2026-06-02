@@ -45,7 +45,6 @@ register_module_defaults("uzanto", {
     "organiza_identiga_numero": ("", "Organisation ID number"),
     "telefonnumeroj":     ([], "Phone numbers (00<country><number>)"),
     "retposhtadresoj":    ([], "Email addresses"),
-    "api_slosilo_huggingface": ("", "HuggingFace API key"),
 })
 
 _H = tr_multi  # short alias for the help-text helper
