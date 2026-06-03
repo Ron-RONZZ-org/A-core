@@ -13,7 +13,7 @@ from A.core.registry import fetch_registry, search_registry, get_module_info, ge
 from A.core.backup_targets import BackupTarget, get_backup_targets, clear_cache as clear_backup_cache
 from A.core.providers import LLMProvider, ToolCall, LLMResponse
 from A.utils import info, success, warning, error, run, copy_to_clipboard, copy_file, serialize_json_columns, deserialize_json_columns
-from A.utils.interactive import select_candidate, confirm_action
+from A.utils.interactive import select_candidate, select_candidates, confirm_action
 from A.utils.normalize import fold_search_text, normalize_french_ligatures, NORMALIZERS
 from A.core.markdown_parser import render_markdown
 from A.core.markdown_html_view import preview_markdown, preview_html, clear_cache
