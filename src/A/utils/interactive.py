@@ -36,7 +36,9 @@ def select_candidate(
         The items to present for selection.
     columns:
         Rich ``Table`` column definitions **without** the auto ``#`` column.
-        Each entry: ``{"header": str, "style": str | None, "width": int | None}``.
+        Each entry: ``{"header": str, "style": str | None, "width": int | None,
+        "no_wrap": bool, "max_width": int | None}``.
+        ``no_wrap`` defaults to ``False`` (text wraps).
     row_formatter:
         ``Callable[[item, 1-based-index], list[str]]`` that returns the cell
         values for a single row.
@@ -60,6 +62,8 @@ def select_candidate(
             col.get("header", ""),
             style=col.get("style"),
             width=col.get("width"),
+            no_wrap=col.get("no_wrap", False),
+            max_width=col.get("max_width"),
         )
 
     for i, item in enumerate(candidates, 1):
