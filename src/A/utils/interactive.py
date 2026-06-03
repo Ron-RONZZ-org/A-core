@@ -19,6 +19,51 @@ from A.utils.output import info, console
 T = TypeVar("T")
 
 
+def _build_candidate_table(
+    candidates: list[T],
+    columns: list[dict[str, Any]],
+    row_formatter: Callable[[T, int], list[str]],
+) -> Table:
+    """Build a numbered Rich table from *candidates*.
+
+    Shared by :func:`select_candidate` and :func:`select_candidates` to
+    avoid duplicating the table-construction logic.
+
+    Parameters
+    ----------
+    candidates:
+        The items to display.
+    columns:
+        Rich ``Table`` column definitions **without** the auto ``#`` column.
+        Each entry: ``{"header": str, "style": str | None, "width": int | None,
+        "no_wrap": bool, "max_width": int | None}``.
+        ``no_wrap`` defaults to ``False`` (text wraps).
+    row_formatter:
+        ``Callable[[item, 1-based-index], list[str]]`` that returns the cell
+        values for a single row.
+
+    Returns
+    -------
+    A fully built :class:`rich.table.Table` ready to render.
+    """
+    table = Table(show_header=True, box=BOX_SIMPLE)
+    table.add_column("#", width=3)
+    for col in columns:
+        table.add_column(
+            col.get("header", ""),
+            style=col.get("style"),
+            width=col.get("width"),
+            no_wrap=col.get("no_wrap", False),
+            max_width=col.get("max_width"),
+        )
+
+    for i, item in enumerate(candidates, 1):
+        cells = row_formatter(item, i)
+        table.add_row(str(i), *cells)
+
+    return table
+
+
 def select_candidate(
     candidates: list[T],
     *,
@@ -54,23 +99,7 @@ def select_candidate(
     if not candidates:
         return None
 
-    # Build table (no per-column colors — greyscale-accessible)
-    table = Table(show_header=True, box=BOX_SIMPLE)
-    table.add_column("#", width=3)
-    for col in columns:
-        table.add_column(
-            col.get("header", ""),
-            style=col.get("style"),
-            width=col.get("width"),
-            no_wrap=col.get("no_wrap", False),
-            max_width=col.get("max_width"),
-        )
-
-    for i, item in enumerate(candidates, 1):
-        cells = row_formatter(item, i)
-        table.add_row(str(i), *cells)
-
-    console.print(table)
+    console.print(_build_candidate_table(candidates, columns, row_formatter))
 
     n = len(candidates)
     info(tr_multi(f"{n} rezultoj", f"{n} results", f"{n} r\u00e9sultats"))
@@ -92,6 +121,75 @@ def select_candidate(
     if 0 <= idx < len(candidates):
         return (idx, candidates[idx])
     return None
+
+
+def select_candidates(
+    candidates: list[T],
+    *,
+    columns: list[dict[str, Any]],
+    row_formatter: Callable[[T, int], list[str]],
+    prompt_text: str | None = None,
+    default: str = "",
+) -> list[tuple[int, T]] | None:
+    """Display a numbered table of *candidates* and prompt the user to
+    select multiple items by space-separated numbers.
+
+    Parameters
+    ----------
+    candidates:
+        The items to present for selection.
+    columns:
+        Rich ``Table`` column definitions **without** the auto ``#`` column.
+        Each entry: ``{"header": str, "style": str | None, "width": int | None,
+        "no_wrap": bool, "max_width": int | None}``.
+        ``no_wrap`` defaults to ``False`` (text wraps).
+    row_formatter:
+        ``Callable[[item, 1-based-index], list[str]]`` that returns the cell
+        values for a single row.
+    prompt_text:
+        Prompt shown to the user.  Defaults to a tr()-translated message.
+    default:
+        Default input when the user presses Enter (``""`` = skip).
+
+    Returns
+    -------
+    A list of ``(0-based-index, item)`` tuples, or ``None`` if the user
+    skipped or entered only invalid tokens.
+    """
+    if not candidates:
+        return None
+
+    console.print(_build_candidate_table(candidates, columns, row_formatter))
+
+    n = len(candidates)
+    info(tr_multi(f"{n} rezultoj", f"{n} results", f"{n} r\u00e9sultats"))
+
+    text = prompt_text or tr_multi(
+        "Elektu numerojn (spacigitajn) por elekti, a\u016d Enter por preteriri",
+        "Select numbers (space-separated) or Enter to skip",
+        "Choisissez des num\u00e9ros (s\u00e9par\u00e9s par des espaces) ou Entr\u00e9e pour ignorer",
+    )
+    raw = typer.prompt(text, default=default)
+    if not raw.strip():
+        return None
+
+    indices: list[int] = []
+    seen: set[str] = set()
+    for token in raw.strip().split():
+        if token in seen:
+            continue
+        seen.add(token)
+        try:
+            idx = int(token) - 1
+        except ValueError:
+            continue
+        if 0 <= idx < len(candidates):
+            indices.append(idx)
+
+    if not indices:
+        return None
+
+    return [(i, candidates[i]) for i in indices]
 
 
 def confirm_action(

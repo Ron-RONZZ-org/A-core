@@ -6,7 +6,11 @@ from unittest.mock import patch
 
 import pytest
 
-from A.utils.interactive import select_candidate, confirm_action
+from A.utils.interactive import (
+    select_candidate,
+    select_candidates,
+    confirm_action,
+)
 
 
 # ── select_candidate ─────────────────────────────────────────────────────────
@@ -246,3 +250,94 @@ def test_prompt_abbrev_default_false_french():
          _p("A.core.i18n.get_current_language", return_value="fr"):
         confirm_action("Go?", default=False)
     assert "[o/N]" in captured[0]
+
+
+# ── select_candidates ──────────────────────────────────────────────────────
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_valid(mock_prompt):
+    """Space-separated input returns correct list of (index, item)."""
+    candidates = ["apple", "banana", "cherry"]
+    mock_prompt.return_value = "1 3"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    assert len(result) == 2
+    assert result[0] == (0, "apple")
+    assert result[1] == (2, "cherry")
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_skip(mock_prompt):
+    """Empty input (Enter) returns None."""
+    candidates = ["apple", "banana"]
+    mock_prompt.return_value = ""
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is None
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_invalid_tokens(mock_prompt):
+    """Non-numeric tokens are silently skipped; valid ones still selected."""
+    candidates = ["apple", "banana", "cherry"]
+    mock_prompt.return_value = "1 abc 3"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    assert len(result) == 2
+    assert result[0] == (0, "apple")
+    assert result[1] == (2, "cherry")
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_all_invalid(mock_prompt):
+    """Only invalid tokens returns None (same as cancel)."""
+    candidates = ["apple", "banana"]
+    mock_prompt.return_value = "abc xyz !!!"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is None
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_out_of_range(mock_prompt):
+    """Out-of-range indices are silently skipped."""
+    candidates = ["apple", "banana"]
+    mock_prompt.return_value = "1 999"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0] == (0, "apple")
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_duplicates(mock_prompt):
+    """Duplicate indices (e.g. '1 1 6') are deduplicated."""
+    candidates = ["apple", "banana", "cherry"]
+    mock_prompt.return_value = "1 1 1"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0] == (0, "apple")
+
+
+@patch("A.utils.interactive.typer.prompt")
+def test_select_candidates_single(mock_prompt):
+    """Single number input works (same as select_candidate but returns list)."""
+    candidates = ["apple", "banana", "cherry"]
+    mock_prompt.return_value = "2"
+
+    result = select_candidates(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0] == (1, "banana")
+
+
+def test_select_candidates_empty_list():
+    """Empty candidates returns None without prompting."""
+    result = select_candidates([], columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is None
