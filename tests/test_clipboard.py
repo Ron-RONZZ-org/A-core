@@ -1,7 +1,9 @@
 """Tests for clipboard module."""
 
+import subprocess
+import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,60 +15,113 @@ from A.utils.clipboard import (
 )
 
 
+def _mock_popen(returncode: int = 0, stderr: str = "",
+                timeout_raise: bool = False) -> MagicMock:
+    """Build a mock subprocess.Popen instance with configurable behaviour."""
+    proc = MagicMock()
+    proc.returncode = returncode
+    if timeout_raise:
+        proc.communicate.side_effect = subprocess.TimeoutExpired(
+            cmd=["fake"], timeout=5.0, output="", stderr=stderr,
+        )
+    else:
+        proc.communicate.return_value = ("", stderr)
+    return proc
+
+
 class TestCopyToClipboard:
     """Tests for copy_to_clipboard function."""
 
     @patch("A.utils.clipboard._get_native_command")
-    @patch("A.utils.clipboard.run")
-    def test_native_command_success(self, mock_run, mock_get_cmd):
+    @patch("A.utils.clipboard.subprocess.Popen")
+    def test_native_command_success(self, mock_popen, mock_get_cmd):
         """Test successful copy via native command."""
         mock_get_cmd.return_value = ["pbcopy"]
-        mock_run.return_value = type("obj", (), {"success": True})()
+        mock_popen.return_value = _mock_popen(returncode=0)
 
-        result = copy_to_clipboard("test text")
+        ok, reason = copy_to_clipboard("test text")
 
-        assert result is True
-        mock_run.assert_called_once_with("pbcopy", input="test text", timeout=2.0)
+        assert ok is True
+        assert reason == ""
+        mock_popen.assert_called_once_with(
+            ["pbcopy"], stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
 
     @patch("A.utils.clipboard._get_native_command")
-    @patch("A.utils.clipboard.run")
+    @patch("A.utils.clipboard.subprocess.Popen")
     def test_native_command_fails_falls_back_to_pyperclip(
-        self, mock_run, mock_get_cmd
+        self, mock_popen, mock_get_cmd
     ):
         """Test fallback to pyperclip when native command fails and pyperclip available."""
-        # When native command fails, code should check pyperclip availability
         mock_get_cmd.return_value = ["pbcopy"]
-        mock_run.return_value = type("obj", (), {"success": False})()
+        mock_popen.return_value = _mock_popen(returncode=1, stderr="err")
 
-        # The code attempts to import pyperclip when _pyperclip_available returns True
-        # Since pyperclip is not installed, this returns False
         with patch("A.utils.clipboard._pyperclip_available", return_value=True):
-            result = copy_to_clipboard("test text")
+            ok, reason = copy_to_clipboard("test text")
 
-        # Without pyperclip installed, should return False even though availability check passed
-        assert result is False
+        # pyperclip not actually installed, so this should fail
+        assert ok is False
+        assert "pyperclip" in reason
+        assert "err" in reason
+
+    @patch("A.utils.clipboard._get_native_command")
+    @patch("A.utils.clipboard.subprocess.Popen")
+    def test_native_command_fails_pyperclip_unavailable(
+        self, mock_popen, mock_get_cmd
+    ):
+        """Test returns diagnostic when both native command and pyperclip fail."""
+        mock_get_cmd.return_value = ["pbcopy"]
+        mock_popen.return_value = _mock_popen(returncode=1, stderr="error")
+
+        with patch("A.utils.clipboard._pyperclip_available", return_value=False):
+            ok, reason = copy_to_clipboard("test text")
+
+        assert ok is False
+        assert "Command" in reason
+        assert "pbcopy" in reason
+        assert "error" in reason
 
     @patch("A.utils.clipboard._get_native_command")
     def test_no_native_command_no_pyperclip(self, mock_get_cmd):
-        """Test returns False when no native command and pyperclip unavailable."""
+        """Test returns diagnostic when no native command and pyperclip unavailable."""
         mock_get_cmd.return_value = None
 
         with patch("A.utils.clipboard._pyperclip_available", return_value=False):
-            result = copy_to_clipboard("test text")
+            ok, reason = copy_to_clipboard("test text")
 
-        assert result is False
+        assert ok is False
+        assert "No clipboard tool found" in reason
 
     @patch("A.utils.clipboard._get_native_command")
-    def test_native_command_returns_false_on_failure(self, mock_get_cmd):
-        """Test returns False when native command returns failure."""
+    @patch("A.utils.clipboard.subprocess.Popen")
+    def test_native_command_timed_out_but_data_written(
+        self, mock_popen, mock_get_cmd
+    ):
+        """Test returns True with diagnostic when native command times out."""
+        mock_get_cmd.return_value = ["xclip", "-selection", "clipboard"]
+        mock_popen.return_value = _mock_popen(timeout_raise=True, stderr="")
+
+        ok, reason = copy_to_clipboard("test text")
+
+        assert ok is True
+        assert "timed out" in reason
+
+    @patch("A.utils.clipboard._get_native_command")
+    @patch("A.utils.clipboard.subprocess.Popen")
+    def test_pyperclip_fallback_success(self, mock_popen, mock_get_cmd):
+        """Test successful fallback to pyperclip when available."""
         mock_get_cmd.return_value = ["pbcopy"]
+        mock_popen.return_value = _mock_popen(returncode=1, stderr="err")
 
-        with patch("A.utils.clipboard.run") as mock_run:
-            mock_run.return_value = type("obj", (), {"success": False})()
+        mock_pyperclip = type("pyperclip_mod", (), {"copy": lambda self_, text: None})()
 
-            result = copy_to_clipboard("test text")
+        with patch.dict("sys.modules", {"pyperclip": mock_pyperclip}):
+            with patch("A.utils.clipboard._pyperclip_available", return_value=True):
+                ok, reason = copy_to_clipboard("test text")
 
-        assert result is False
+        assert ok is True
+        assert reason == ""
 
 
 class TestCopyFile:
@@ -75,20 +130,34 @@ class TestCopyFile:
     @patch("A.utils.clipboard.copy_to_clipboard")
     def test_copy_file_success(self, mock_copy):
         """Test successful file copy."""
-        mock_copy.return_value = True
+        mock_copy.return_value = (True, "")
 
-        result = copy_file("tests/fixtures/sample.txt")
+        ok, reason = copy_file("tests/fixtures/sample.txt")
 
-        assert result is True
+        assert ok is True
+        assert reason == ""
 
     @patch("A.utils.clipboard.Path")
     def test_copy_file_read_error(self, mock_path):
-        """Test returns False when file cannot be read."""
+        """Test returns diagnostic when file cannot be read."""
         mock_path.return_value.read_text.side_effect = OSError("No such file")
 
-        result = copy_file("nonexistent.txt")
+        ok, reason = copy_file("nonexistent.txt")
 
-        assert result is False
+        assert ok is False
+        assert "File read error" in reason
+
+    @patch("A.utils.clipboard.Path")
+    def test_copy_file_encoding_error(self, mock_path):
+        """Test returns diagnostic on encoding error."""
+        mock_path.return_value.read_text.side_effect = UnicodeDecodeError(
+            "utf-8", b"\xff\xfe", 0, 1, "invalid start byte"
+        )
+
+        ok, reason = copy_file("binary.bin")
+
+        assert ok is False
+        assert "File encoding error" in reason
 
 
 class TestPyperclipAvailable:
@@ -97,13 +166,10 @@ class TestPyperclipAvailable:
     def test_returns_true_when_pyperclip_available(self):
         """Test returns True when pyperclip can be imported."""
         with patch("builtins.__import__") as mock_import:
-            # Simulate successful import
             mock_import.side_effect = ImportError("not pyperclip")
 
-            # Try actual import to see if it works
             result = _pyperclip_available()
 
-            # The function uses try/except, so it should handle import errors
             assert isinstance(result, bool)
 
 
