@@ -156,3 +156,33 @@ class TestBuildSearchQuery:
         config = _make_config()
         sql, _ = build_search_query(config, "hello", order_by="teksto")
         assert "ORDER BY vorto.teksto" in sql
+
+    def test_empty_query_with_range_filters(self):
+        """Empty query with range_filters skips FTS MATCH clause."""
+        config = _make_config()
+        sql, params = build_search_query(
+            config,
+            "",
+            range_filters={"kreita_je": ("2026-01-01T00:00:00+00:00", None)},
+        )
+        assert "MATCH" not in sql
+        assert "kreita_je >= ?" in sql
+        assert "2026-01-01T00:00:00+00:00" in params
+
+    def test_empty_query_with_filters(self):
+        """Empty query with exact filters skips FTS MATCH."""
+        config = _make_config()
+        sql, params = build_search_query(
+            config,
+            "",
+            filters={"lingvo": "fr"},
+        )
+        assert "MATCH" not in sql
+        assert "vorto.lingvo = ?" in sql
+        assert "fr" in params
+
+    def test_empty_query_no_filters_no_where(self):
+        """Fully empty query+no filters produces no WHERE clause."""
+        config = _make_config()
+        sql, _ = build_search_query(config, "")
+        assert "WHERE" not in sql.upper() or "WHERE \n" in sql

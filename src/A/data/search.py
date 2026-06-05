@@ -114,12 +114,16 @@ def build_search_query(
     else:
         normalized_query = query
 
-    # Escape FTS5 special characters and use prefix matching
-    escaped = normalized_query.replace('"', '""')
-    fts_query = f'"{escaped}"*'
+    # Build WHERE clauses: FTS MATCH only when query is non-empty
+    where_clauses: list[str] = []
+    params: list = []
 
-    where_clauses = [f"{config.fts_table} MATCH ?"]
-    params: list = [fts_query]
+    if normalized_query.strip():
+        # Escape FTS5 special characters and use prefix matching
+        escaped = normalized_query.replace('"', '""')
+        fts_query = f'"{escaped}"*'
+        where_clauses.append(f"{config.fts_table} MATCH ?")
+        params.append(fts_query)
 
     for field, value in (filters or {}).items():
         if value is not None and value != "":
@@ -135,8 +139,10 @@ def build_search_query(
             where_clauses.append(f"{col} <= ?")
             params.append(hi)
 
+    has_fts = any("MATCH" in c for c in where_clauses)
+
     if order_by == "relevance":
-        order_clause = "rank"
+        order_clause = "rank" if has_fts else f"{config.table}.kreita_je DESC"
     elif order_by == "date":
         order_clause = f"{config.table}.kreita_je DESC"
     elif order_by == "date_asc":
@@ -144,10 +150,16 @@ def build_search_query(
     else:
         order_clause = f"{config.table}.{order_by}"
 
+    if has_fts:
+        from_clause = f"{config.table} JOIN {config.fts_table} ON {config.table}.rowid = {config.fts_table}.rowid"
+    else:
+        from_clause = config.table
+
+    where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
     sql = f"""
-    SELECT {config.table}.* FROM {config.table}
-    JOIN {config.fts_table} ON {config.table}.rowid = {config.fts_table}.rowid
-    WHERE {' AND '.join(where_clauses)}
+    SELECT {config.table}.* FROM {from_clause}
+    {where_sql}
     ORDER BY {order_clause}
     LIMIT ? OFFSET ?
     """
