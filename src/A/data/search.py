@@ -21,6 +21,10 @@ from typing import Callable
 from A.utils.normalize import fold_search_text
 
 
+# Sentinel for unbounded range filter values sent as None
+_UNBOUNDED = "___unbounded___"
+
+
 @dataclass
 class FTSConfig:
     """Configuration for FTS5 full-text search on a table.
@@ -84,6 +88,7 @@ def build_search_query(
     order_by: str = "relevance",
     limit: int = 50,
     offset: int = 0,
+    range_filters: dict[str, tuple[str | None, str | None]] | None = None,
 ) -> tuple[str, list]:
     """Build a search SQL with FTS5 + filters + sort.
 
@@ -94,6 +99,9 @@ def build_search_query(
         order_by: "relevance" (default), "date", or column name
         limit: Max results
         offset: Pagination offset
+        range_filters: Column → (iso_start, iso_end) range filters.
+            Generates ``WHERE col >= ? AND col <= ?`` clauses.
+            A ``None`` bound means unbounded on that side.
 
     Returns:
         (sql, params) tuple ready for db.execute()
@@ -117,6 +125,15 @@ def build_search_query(
         if value is not None and value != "":
             where_clauses.append(f"{config.table}.{field} = ?")
             params.append(value)
+
+    for field, (lo, hi) in (range_filters or {}).items():
+        col = f"{config.table}.{field}"
+        if lo is not None:
+            where_clauses.append(f"{col} >= ?")
+            params.append(lo)
+        if hi is not None:
+            where_clauses.append(f"{col} <= ?")
+            params.append(hi)
 
     if order_by == "relevance":
         order_clause = "rank"

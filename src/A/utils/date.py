@@ -111,7 +111,57 @@ def parse_partial_datetime(
     )
 
 
+def date_range(
+    dato_de: str | None = None,
+    dato_gis: str | None = None,
+    *,
+    ref: date | None = None,
+) -> tuple[str | None, str | None]:
+    """Convert partial date bounds into ISO 8601 range strings (start/end of day).
+
+    Strips hyphens from input, then calls :func:`parse_partial_date` on each
+    bound, returning UTC ISO strings for start-of-day (``dato_de``) and
+    end-of-day (``dato_gis``).
+
+    A ``None`` bound means "unbounded" — the corresponding return value is
+    also ``None``.
+
+    Args:
+        dato_de: Start date (YYYYMMDD, MMDD, DD, or YYYY-MM-DD).
+        dato_gis: End date (same formats).
+        ref: Reference date for filling in missing parts in partial tokens.
+             Defaults to ``date.today()``.
+
+    Returns:
+        Tuple ``(iso_start, iso_end)`` where each is an ISO 8601 string
+        or ``None`` if the corresponding input was ``None``.
+
+    Raises:
+        ValueError: If a token cannot be parsed.
+    """
+    def _strip_hyphens(val: str | None) -> str | None:
+        if val is None:
+            return None
+        return val.strip().replace("-", "")
+
+    start: str | None = None
+    end: str | None = None
+
+    raw_de = _strip_hyphens(dato_de)
+    raw_gis = _strip_hyphens(dato_gis)
+
+    if raw_de:
+        d = parse_partial_date(raw_de, ref=ref)
+        start = d.isoformat() + "T00:00:00+00:00"
+    if raw_gis:
+        d = parse_partial_date(raw_gis, ref=ref)
+        end = d.isoformat() + "T23:59:59+00:00"
+
+    return (start, end)
+
+
 __all__ = [
     "parse_partial_date",
     "parse_partial_datetime",
+    "date_range",
 ]

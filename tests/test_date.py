@@ -143,5 +143,82 @@ class TestParsePartialDatetime:
         assert "2026-04-21" in result
 
 
+class TestDateRange:
+    """Tests for date_range."""
+
+    def test_both_bounds_yyyymmdd(self):
+        """Full YYYYMMDD bounds produce correct ISO range."""
+        from A.utils.date import date_range
+
+        start, end = date_range("20260421", "20260425")
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end == "2026-04-25T23:59:59+00:00"
+
+    def test_with_hyphens(self):
+        """Input with hyphens is stripped correctly."""
+        from A.utils.date import date_range
+
+        start, end = date_range("2026-04-21", "2026-04-25")
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end == "2026-04-25T23:59:59+00:00"
+
+    def test_partial_mmdd(self):
+        """MMDD format is resolved using ref date."""
+        from A.utils.date import date_range
+        from datetime import date
+
+        start, end = date_range("0421", "0425", ref=date(2026, 5, 1))
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end == "2026-04-25T23:59:59+00:00"
+
+    def test_partial_dd(self):
+        """DD format is resolved using ref date."""
+        from A.utils.date import date_range
+        from datetime import date
+
+        start, end = date_range("21", "25", ref=date(2026, 4, 1))
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end == "2026-04-25T23:59:59+00:00"
+
+    def test_only_start(self):
+        """When dato_gis is None, end is None."""
+        from A.utils.date import date_range
+
+        start, end = date_range("20260421", None)
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end is None
+
+    def test_only_end(self):
+        """When dato_de is None, start is None."""
+        from A.utils.date import date_range
+
+        start, end = date_range(None, "20260425")
+        assert start is None
+        assert end == "2026-04-25T23:59:59+00:00"
+
+    def test_both_none(self):
+        """When both are None, both return values are None."""
+        from A.utils.date import date_range
+
+        start, end = date_range(None, None)
+        assert start is None
+        assert end is None
+
+    def test_edge_same_day(self):
+        """Same date for both bounds gives same-day range."""
+        from A.utils.date import date_range
+
+        start, end = date_range("20260421", "20260421")
+        assert start == "2026-04-21T00:00:00+00:00"
+        assert end == "2026-04-21T23:59:59+00:00"
+
+    def test_invalid_date_raises(self):
+        """Invalid date propagates ValueError."""
+        from A.utils.date import date_range
+
+        with pytest.raises(ValueError):
+            date_range("20261301", "20260425")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
