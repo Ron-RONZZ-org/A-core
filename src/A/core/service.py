@@ -317,6 +317,7 @@ class CRUDService:
         order_by: str = "relevance",
         limit: int = 50,
         offset: int = 0,
+        range_filters: dict[str, tuple[str | None, str | None]] | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search via FTS5 with filters and sorting.
 
@@ -326,6 +327,7 @@ class CRUDService:
             order_by: "relevance" (BM25), "date", "date_asc", or column name
             limit: Max results
             offset: Pagination offset
+            range_filters: Column → (iso_start, iso_end) range filters.
 
         Returns:
             List of matching entries from main table
@@ -341,7 +343,8 @@ class CRUDService:
 
         try:
             sql, params = build_search_query(
-                self._fts_config, query, filters, order_by, limit, offset
+                self._fts_config, query, filters, order_by, limit, offset,
+                range_filters=range_filters,
             )
             return self.db.execute(sql, tuple(params))
         except Exception:
@@ -425,18 +428,27 @@ class CRUDService:
         fuzzy: bool = False,
         order_by: str = "relevance",
         limit: int = 50,
+        range_filters: dict[str, tuple[str | None, str | None]] | None = None,
     ) -> list[dict[str, Any]]:
         """Combined search: FTS5 + filters + optional fuzzy scoring.
+
+        Args:
+            query: Search text
+            filters: Exact match filters
+            fuzzy: Enable fuzzy re-ranking
+            order_by: Sort order
+            limit: Max results
+            range_filters: Column → (iso_start, iso_end) range filters.
 
         Priority:
         1. FTS5 (fast, built-in)
         2. Optional fuzzy re-ranking (rapidfuzz if available)
         3. LIKE fallback
         """
-        if not query and not filters:
+        if not query and not filters and not range_filters:
             return self.list(order_by="kreita_je", desc=True, limit=limit)
 
-        results = self.search_fts(query, filters, order_by, limit)
+        results = self.search_fts(query, filters, order_by, limit, range_filters=range_filters)
 
         if fuzzy and results and query:
             results = self.search_fuzzy(query, limit=limit)
