@@ -16,9 +16,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from A.utils.normalize import fold_search_text
+
+if TYPE_CHECKING:
+    from A.data.base import SQLiteDB
 
 
 # Sentinel for unbounded range filter values sent as None
@@ -51,6 +54,23 @@ class FTSConfig:
         # Default: normalize all text columns with fold_search_text
         if not self.normalize:
             self.normalize = {col: fold_search_text for col in self.fts_columns}
+
+    def optimize(self, db: SQLiteDB) -> None:
+        """Run FTS5 OPTIMIZE on the FTS virtual table to rebuild the index.
+
+        FTS5 tables can accumulate internal fragmentation over time as rows
+        are inserted, updated, and deleted.  Periodic optimization prevents
+        progressive search-performance degradation.
+
+        Call this method periodically (e.g. every 50 writes) or as a
+        maintenance operation.
+
+        Args:
+            db: An :class:`A.data.base.SQLiteDB` instance.
+        """
+        db.execute(
+            f"INSERT INTO {self.fts_table}({self.fts_table}) VALUES('optimize')"
+        )
 
 
 def build_fts_schema(config: FTSConfig) -> list[str]:
