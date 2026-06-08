@@ -212,3 +212,82 @@ class TestFetchTextRedirect:
         with patch("A.core.http.urlopen", return_value=mock_resp):
             with pytest.raises(ValueError, match="Redirect blocked"):
                 fetch_text("https://example.com/evil-redirect")
+
+
+# ── fetch_binary ────────────────────────────────────────────────────────────────
+
+
+class TestFetchBinary:
+    """Tests for fetch_binary()."""
+
+    def test_scheme_validation(self) -> None:
+        """Non-http/https schemes should be rejected."""
+        from A.core.http import fetch_binary
+
+        with pytest.raises(ValueError, match="scheme"):
+            fetch_binary("file:///etc/passwd")
+        with pytest.raises(ValueError, match="scheme"):
+            fetch_binary("ftp://example.com/file")
+
+    def test_ssrf_blocked(self) -> None:
+        """Private/localhost IPs should be rejected before any request."""
+        from A.core.http import fetch_binary
+
+        with patch("A.core.http.urlopen") as mock_urlopen:
+            with pytest.raises(ValueError, match="SSRF blocked"):
+                fetch_binary("http://127.0.0.1:11434")
+            mock_urlopen.assert_not_called()
+
+    def test_binary_content_accepted(self) -> None:
+        """Binary content (null bytes) should NOT be rejected (unlike fetch_text)."""
+        from A.core.http import fetch_binary
+
+        mock_resp = MagicMock()
+        png_header = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        mock_resp.read.return_value = png_header
+        mock_resp.geturl.return_value = "https://example.com/image.png"
+
+        with patch("A.core.http.urlopen", return_value=mock_resp):
+            data = fetch_binary("https://example.com/image.png")
+        assert data == png_header
+
+    def test_size_limit(self) -> None:
+        """Content exceeding max_bytes should be truncated."""
+        from A.core.http import fetch_binary
+
+        big_content = b"A" * 10_000
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = big_content
+        mock_resp.geturl.return_value = "https://example.com/big"
+
+        with patch("A.core.http.urlopen", return_value=mock_resp):
+            data = fetch_binary("https://example.com/big", max_bytes=500)
+        assert len(data) == 500
+        assert data == b"A" * 500
+
+    def test_redirect_validated(self) -> None:
+        """Redirects should be re-validated for SSRF."""
+        from A.core.http import fetch_binary
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"content"
+        mock_resp.geturl.return_value = "https://final.example.com"
+
+        with (
+            patch("A.core.http.urlopen", return_value=mock_resp),
+            patch("A.core.http._check_host") as mock_check,
+        ):
+            data = fetch_binary("https://example.com/redirect")
+        assert data == b"content"
+        assert mock_check.call_count == 2
+
+    def test_redirect_to_bad_scheme_rejected(self) -> None:
+        """Redirect to non-http(s) should be rejected."""
+        from A.core.http import fetch_binary
+
+        mock_resp = MagicMock()
+        mock_resp.geturl.return_value = "file:///etc/passwd"
+
+        with patch("A.core.http.urlopen", return_value=mock_resp):
+            with pytest.raises(ValueError, match="Redirect blocked"):
+                fetch_binary("https://example.com/evil-redirect")

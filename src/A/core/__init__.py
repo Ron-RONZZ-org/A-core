@@ -29,9 +29,12 @@ from A.core.wikidata import (
 # Lazy import: http.py may not exist on older installations.
 try:
     from A.core.http import fetch_text as _fetch_text
+    from A.core.http import fetch_binary as _fetch_binary
     fetch_text = _fetch_text
+    fetch_binary = _fetch_binary
 except ImportError:
     fetch_text = None  # type: ignore[assignment]
+    fetch_binary = None  # type: ignore[assignment]
 
 __all__ = [
     # Types
@@ -109,6 +112,8 @@ __all__ = [
 
 if fetch_text is not None:
     __all__.append("fetch_text")
+if fetch_binary is not None:
+    __all__.append("fetch_binary")
 __all__.extend(["html_to_text", "extract_text"])
 __all__.extend([
     "COMMON_PROPERTIES",
