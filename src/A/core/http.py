@@ -21,7 +21,7 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-__all__ = ["fetch_text"]
+__all__ = ["fetch_text", "fetch_binary"]
 
 # Private and link-local IP ranges — requests resolving to these are rejected
 # to prevent Server-Side Request Forgery (SSRF) attacks.
@@ -179,3 +179,57 @@ def fetch_text(url: str, *, max_bytes: int = 5_000_000, timeout: int = 15) -> st
             continue
 
     return raw.decode("utf-8", errors="replace")
+
+
+def fetch_binary(url: str, *, max_bytes: int = 100_000_000, timeout: int = 30) -> bytes:
+    """Fetch a URL and return its body as raw bytes.
+
+    Like :func:`fetch_text`, but without text-decoding or null-byte
+    rejection — suitable for downloading images, videos, and other
+    binary files.
+
+    Args:
+        url: HTTP or HTTPS URL to fetch.
+        max_bytes: Maximum number of bytes to read.  The response is
+            truncated (without error) if it exceeds this limit.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        Raw binary content.
+
+    Raises:
+        ValueError: If the URL scheme is not http/https, or if the
+            host resolves to a private / link-local IP (SSRF guard).
+        URLError: If the network request fails (DNS, connection
+            refused, HTTP error, timeout, etc.).
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(
+            f"Blocked URL scheme: {parsed.scheme!r}. "
+            f"Only http:// and https:// are allowed."
+        )
+
+    host = parsed.hostname
+    _check_host(host)
+
+    req = Request(url, headers={"User-Agent": "A-core/1.0 (+https://github.com/Ron-RONZZ-org/A-core)"})
+    resp = urlopen(req, timeout=timeout)
+
+    # After possible redirects: validate final resolved IP
+    final_url = resp.geturl()
+    if final_url != url:
+        final_parsed = urlparse(final_url)
+        if final_parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"Redirect blocked: scheme {final_parsed.scheme!r}. "
+                f"Only http/https targets are allowed."
+            )
+        _check_host(final_parsed.hostname)
+
+    # Read response up to max_bytes
+    raw = resp.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raw = raw[:max_bytes]
+
+    return raw
