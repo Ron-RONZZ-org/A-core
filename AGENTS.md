@@ -162,6 +162,43 @@ Modules migrating from non-standard names:
 4. **No custom TUI code** — integrate existing tools
 5. **WAL mode** for SQLite
 6. **Test coverage required** for all modules
+7. **Use `safe_rmtree`/`safe_unlink`** — NEVER use `shutil.rmtree()`, `Path.unlink()`, or `rm -rf` on A data directories. Use `A.core.paths.safe_rmtree()` and `A.core.paths.safe_unlink()` instead. They check for `.a-protected` sentinel markers and raise `ProtectedPathError` if the target is protected.
+8. **Auto-backup is automatic** — `SQLiteDB` backs up existing databases on init and before every DDL statement. Do NOT disable this. Backups go to `~/.local/share/A/.backups/{module}/`.
+
+## Data Protection Rules
+
+A-core implements three layers of data protection:
+
+| Layer | What it does | Stops |
+|-------|-------------|-------|
+| **Auto-backup** (`A.core.backup`) | Timestamped, SHA-256 verified DB copies to `~/.local/share/A/.backups/` | Data loss from any cause — backups survive `rm -rf` of module data dir |
+| **Sentinel marker** (`A.core.paths`) | `.a-protected` file in every A directory; `safe_rmtree()`/`safe_unlink()` refuse to delete | Python-level accidents (`shutil.rmtree`, `Path.unlink`) |
+| **`force=True` safety valve** | Bypass protection with explicit opt-in | Prevents accidental bypass — `safe_rmtree(path, force=True)` must be intentional |
+
+### Do's and Don'ts
+
+| ❌ Don't | ✅ Do instead |
+|----------|-------------|
+| `shutil.rmtree(data_dir() / "A-modulo")` | `safe_rmtree(data_dir() / "A-modulo", force=True)` — and explain why in commit message |
+| `Path.unlink(db_path)` | `safe_unlink(db_path, force=True)` — only when truly intentional |
+| `rm -rf ~/.local/share/A/A-modulo/` | Use `A modulo forigi` or module-level delete command |
+| Disable auto-backup in `SQLiteDB` | Keep it enabled — backups are best-effort and never block DB access |
+| Manually delete `.backups/` files | Let `prune_backups()` manage retention |
+
+### Restore
+
+Backups are timestamped and stored per-module:
+
+```
+~/.local/share/A/.backups/A-modulo/20260612T103042123456789.db
+```
+
+To restore the latest backup for a module:
+
+```python
+from A.core.backup import restore_latest
+restore_latest("A-modulo", data_dir() / "A-modulo" / "data.db")
+```
 
 ## Package Manager: `uv` is Required
 
@@ -329,6 +366,11 @@ from A.core import (
 | `config_dir() -> Path` | `~/.config/A` | User config directory |
 | `cache_dir() -> Path` | `~/.cache/A` | User cache directory |
 | `state_dir() -> Path` | `~/.local/state/A` | User state directory |
+| `protect_directory(path: Path) -> Path` | *path* | Create `.a-protected` sentinel marker (idempotent) |
+| `is_protected(path: Path) -> bool` | True if protected | Check path or any parent for sentinel |
+| `safe_rmtree(path, *, force=False) -> None` | — | Remove dir tree; raises `ProtectedPathError` if protected |
+| `safe_unlink(path, *, force=False) -> None` | — | Delete file; raises `ProtectedPathError` if parent protected |
+| `protect_all() -> None` | — | Protect all 4 standard A directories |
 
 All four functions respect the ``A_DIR`` environment variable. When set,
 paths resolve under ``$A_DIR / {data,config,cache,state}`` instead of
@@ -453,6 +495,50 @@ db = SQLiteDB("vorto", schema)
 - Foreign keys enabled
 - Returns rows as dicts (sqlite3.Row factory)
 - Schema applied idempotently (only creates tables that don't exist)
+- **Auto-backup**: Existing databases are backed up on init and before every DDL via ``A.core.backup``
+
+### Backup (`A.core.backup`)
+
+Timestamped, SHA-256 verified database backups stored outside module data directories.
+
+Backup location::
+
+    ~/.local/share/A/.backups/{module}/{timestamp}.db
+
+This survives ``rm -rf`` of ``~/.local/share/A/{module}/`` because
+``.backups/`` lives directly under the A data root.
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `backup_dir() -> Path` | `data_dir() / ".backups"` | Root backup directory (not created automatically) |
+| `backup_database(db_path, *, module, retention) -> Path \| None` | Backup path or ``None`` | Create timestamped, checksum-verified backup; auto-prune to *retention* (default 10) |
+| `list_backups(module) -> list[dict]` | Backup metadata | List backups newest first: ``path``, ``timestamp``, ``size_bytes`` |
+| `restore_latest(module, target_path) -> Path` | *target_path* | Restore newest backup with checksum verification |
+| `restore_by_timestamp(module, prefix, target_path) -> Path` | *target_path* | Restore by timestamp prefix (e.g. ``"2026-06-12"``) |
+| `prune_backups(module, *, retention) -> int` | Deleted count | Keep N newest, delete rest; idempotent |
+
+```python
+from A.core.backup import backup_database, restore_latest, list_backups
+
+# Auto-backup before migration
+backup_database(db_path, module="A-semantika")
+
+# List available backups
+for b in list_backups("A-semantika"):
+    print(b["timestamp"], b["size_bytes"])
+
+# Restore the newest
+restore_latest("A-semantika", db_path)
+```
+
+**Integration with SQLiteDB:** Auto-backup happens automatically:
+
+```python
+from A.data.base import SQLiteDB
+
+db = SQLiteDB("mydb", module="my_mod")  # backups go to .backups/my_mod/
+db.execute("ALTER TABLE t ADD COLUMN x")  # auto-backup before DDL
+```
 
 ### Service Layer (`A.core.service`)
 
