@@ -9,6 +9,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import Any
 
+from A.core.backup import backup_database as _backup_database
 from A.core.paths import data_dir
 
 
@@ -29,23 +30,43 @@ class SQLiteDB:
     connection.  The ``atexit`` handler (best-effort) only closes the main
     thread's connection; other threads' connections are released when the
     thread-local storage is cleared at thread exit.
+
+    .. versionchanged:: 1.x
+       Added automatic backup: existing databases are backed up on init
+       (via :func:`A.core.backup.backup_database`) and before any DDL
+       statement.  See :meth:`_auto_backup`.
     """
 
-    def __init__(self, name_or_path: str | Path, schema: dict[str, str] = None):
+    _DDL_PREFIXES = ("CREATE", "ALTER", "DROP", "ANALYZE", "REINDEX", "ATTACH", "DETACH")
+
+    def __init__(
+        self,
+        name_or_path: str | Path,
+        schema: dict[str, str] = None,
+        module: str | None = None,
+    ):
         """
         Args:
-            name_or_path: Database name (e.g., "tempo") or full Path
-            schema: dict of table_name -> CREATE TABLE SQL
+            name_or_path: Database name (e.g., "tempo") or full Path.
+            schema: dict of table_name -> CREATE TABLE SQL.
+            module: Optional module name for backup organisation.
+                    If ``None``, derived from the path (see
+                    :meth:`_detect_module`).
         """
         if isinstance(name_or_path, Path):
             self.path = name_or_path
         else:
             self.path = data_dir() / f"{name_or_path}.db"
         self._schema = schema or {}
+        self._module = module
         self._local = threading.local()
 
         # Ensure parent directory exists
         self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Auto-backup existing database before any writes
+        if self.path.exists():
+            self._auto_backup()
 
         # Initialize schema if provided
         if schema:
@@ -68,6 +89,51 @@ class SQLiteDB:
         if not self.path.exists():
             return
         self.close()
+
+    # ── Auto-backup helpers ─────────────────────────────────────────────────
+
+    def _detect_module(self) -> str:
+        """Derive the module name from the database path.
+
+        Priority:
+        1. Explicit ``module`` parameter passed to :meth:`__init__`.
+        2. Path-derived: if the DB is under ``data_dir() / {mod}/``,
+           use ``{mod}`` as the module name (e.g. ``"A-semantika"``).
+        3. Stem-derived: use ``self.path.stem`` (e.g. ``"vorto"`` for
+           ``vorto.db``).
+
+        Returns:
+            A module name string suitable for :func:`A.core.backup.backup_database`.
+        """
+        if self._module:
+            return self._module
+
+        # Try to derive from parent path relative to data_dir()
+        try:
+            dd = data_dir()
+            rel = self.path.parent.relative_to(dd)
+            return str(rel.parts[0])
+        except (ValueError, IndexError):
+            pass
+
+        # Fallback: use the filename stem
+        return self.path.stem
+
+    def _auto_backup(self) -> None:
+        """Create a timestamped backup of the current database.
+
+        Uses :func:`A.core.backup.backup_database` with the module name
+        derived from :meth:`_detect_module`.
+
+        Best-effort: failures are silently ignored so that backup
+        issues never block database access.
+        """
+        try:
+            _backup_database(self.path, module=self._detect_module())
+        except Exception:
+            pass  # Best-effort
+
+    # ── Connection management ────────────────────────────────────────────────
 
     def close(self) -> None:
         """Checkpoint WAL and close the calling thread's connection. Idempotent."""
@@ -127,12 +193,27 @@ class SQLiteDB:
         finally:
             pass  # Connection is cached; don't close
 
+    def _is_ddl(self, sql: str) -> bool:
+        """Check if *sql* is a DDL statement (case-insensitive)."""
+        stripped = sql.strip().upper()
+        return any(stripped.startswith(p) for p in self._DDL_PREFIXES)
+
     def execute(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
         """Execute SQL and return results as dicts.
 
         Auto-commits for DML statements. DDL statements are auto-committed
         by SQLite regardless.
+
+        .. note::
+           Before executing a DDL statement (``CREATE``, ``ALTER``, ``DROP``,
+           etc.), the database is automatically backed up via
+           :func:`A.core.backup.backup_database` to capture the
+           pre-migration state.
         """
+        # Auto-backup before DDL (captures pre-migration state)
+        if self._is_ddl(sql):
+            self._auto_backup()
+
         conn = self._get_conn()
         cursor = conn.execute(sql, params or ())
         rows = cursor.fetchall()
