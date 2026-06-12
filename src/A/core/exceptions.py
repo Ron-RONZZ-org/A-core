@@ -35,3 +35,22 @@ class CommandError(AError):
 class RegistryError(AError):
     """Module registry fetch/parse errors."""
     pass
+
+
+class ProtectedPathError(AError):
+    """Raised when attempting to delete/modify a protected A directory.
+
+    A directory is *protected* when it (or an ancestor) contains a
+    ``.a-protected`` marker file.  See :func:`A.core.paths.protect_directory`.
+    """
+
+    def __init__(self, path: "str | Path", operation: str = "delete"):
+        from pathlib import Path
+
+        self.path = Path(path)
+        self.operation = operation
+        super().__init__(
+            f"Cannot {operation} protected path: {path}. "
+            f"Remove the '.a-protected' marker file first "
+            f"if you are sure."
+        )

@@ -12,6 +12,11 @@ from A.core.paths import (
     config_dir,
     data_dir,
     ensure_dirs,
+    is_protected,
+    protect_all,
+    protect_directory,
+    safe_rmtree,
+    safe_unlink,
     state_dir,
 )
 
@@ -169,3 +174,132 @@ def test_patch_paths_isolates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert config_dir() == tmp_path / "config"
     assert cache_dir() == tmp_path / "cache"
     assert state_dir() == tmp_path / "state"
+
+
+# ── Sentinel protection ────────────────────────────────────────────────────────
+
+
+def test_protect_directory_creates_marker(tmp_path: Path) -> None:
+    """protect_directory() creates a .a-protected marker file."""
+    d = tmp_path / "protected_dir"
+    result = protect_directory(d)
+    assert result == d
+    assert d.is_dir()
+    assert (d / ".a-protected").exists()
+
+
+def test_protect_directory_idempotent(tmp_path: Path) -> None:
+    """protect_directory() is safe to call multiple times."""
+    d = tmp_path / "idempotent"
+    protect_directory(d)
+    protect_directory(d)
+    assert d.is_dir()
+    assert (d / ".a-protected").exists()
+
+
+def test_is_protected_direct(tmp_path: Path) -> None:
+    """is_protected() returns True for a directly protected directory."""
+    d = tmp_path / "direct"
+    protect_directory(d)
+    assert is_protected(d)
+
+
+def test_is_protected_parent(tmp_path: Path) -> None:
+    """is_protected() returns True for a child when parent is protected."""
+    parent = tmp_path / "parent"
+    child = parent / "child"
+    protect_directory(parent)
+    child.mkdir(parents=True, exist_ok=True)
+    assert is_protected(child)
+
+
+def test_is_protected_unprotected(tmp_path: Path) -> None:
+    """is_protected() returns False for an unprotected directory."""
+    d = tmp_path / "unprotected"
+    d.mkdir(parents=True, exist_ok=True)
+    assert not is_protected(d)
+
+
+def test_safe_rmtree_refuses_protected(tmp_path: Path) -> None:
+    """safe_rmtree() raises ProtectedPathError on protected directory."""
+    from A.core.exceptions import ProtectedPathError
+
+    d = tmp_path / "guarded"
+    protect_directory(d)
+
+    with pytest.raises(ProtectedPathError, match="protected"):
+        safe_rmtree(d)
+
+
+def test_safe_rmtree_force_bypasses(tmp_path: Path) -> None:
+    """safe_rmtree(force=True) bypasses protection check."""
+    d = tmp_path / "force_delete"
+    protect_directory(d)
+    (d / "test.txt").write_text("hello")
+
+    safe_rmtree(d, force=True)
+    assert not d.exists()
+
+
+def test_safe_rmtree_unprotected_ok(tmp_path: Path) -> None:
+    """safe_rmtree() works on unprotected directories."""
+    d = tmp_path / "plain"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "test.txt").write_text("hello")
+
+    safe_rmtree(d)
+    assert not d.exists()
+
+
+def test_safe_rmtree_non_existent(tmp_path: Path) -> None:
+    """safe_rmtree() raises FileNotFoundError for non-existent path."""
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        safe_rmtree(tmp_path / "ghost")
+
+
+def test_safe_unlink_refuses_protected(tmp_path: Path) -> None:
+    """safe_unlink() raises ProtectedPathError on file in protected dir."""
+    from A.core.exceptions import ProtectedPathError
+
+    d = tmp_path / "guarded"
+    protect_directory(d)
+    f = d / "file.txt"
+    f.write_text("secret")
+
+    with pytest.raises(ProtectedPathError, match="protected"):
+        safe_unlink(f)
+
+
+def test_safe_unlink_force_bypasses(tmp_path: Path) -> None:
+    """safe_unlink(force=True) bypasses protection check."""
+    d = tmp_path / "force_unlink"
+    protect_directory(d)
+    f = d / "file.txt"
+    f.write_text("secret")
+
+    safe_unlink(f, force=True)
+    assert not f.exists()
+
+
+def test_safe_unlink_non_existent(tmp_path: Path) -> None:
+    """safe_unlink() raises FileNotFoundError for non-existent path."""
+    with pytest.raises(FileNotFoundError, match="does not exist"):
+        safe_unlink(tmp_path / "ghost.txt")
+
+
+def test_protect_all_covers_standard_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """protect_all() protects all 4 standard directories."""
+    monkeypatch.setenv(_A_DIR_ENV, str(tmp_path))
+
+    protect_all()
+    for d in [data_dir(), config_dir(), cache_dir(), state_dir()]:
+        assert (d / ".a-protected").exists(), f"{d} should be protected"
+
+
+def test_ensure_dirs_now_protects(tmp_path: Path) -> None:
+    """ensure_dirs() now also protects the directories it creates."""
+    # The conftest isolate_core fixture redirects paths under tmp_path
+    ensure_dirs()
+    for d in [data_dir(), config_dir(), cache_dir(), state_dir()]:
+        assert d.is_dir(), f"{d} should exist"
+        assert (d / ".a-protected").exists(), f"{d} should be protected"
