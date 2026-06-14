@@ -76,11 +76,28 @@ def _make_parser(escape: bool = True) -> mistune.Markdown:
     The mistune math plugin's default renderers HTML-escape math content
     (``&`` → ``&amp;``), which breaks LaTeX ``&`` (matrix column separator,
     alignment, etc.). We override the renderers to pass raw LaTeX through.
+
+    Two modifications are applied on top of the plugin:
+
+    1. The inline math regex ``\\$(?!\\s)…(?!\\s)\\$`` is relaxed to
+       ``\\$\\s*…\\s*\\$``, allowing whitespace after the opening ``$`` and
+       before the closing ``$``.  The upstream pattern rejects ``$ f(x) $``
+       (space after ``$``), which is common in LaTeX prose.
+
+    2. The math renderers escape ``&``, ``<``, ``>`` etc. so the HTML DOM
+       text node contains proper LaTeX after browser decoding.
     """
     renderer = HighlightRenderer(escape=escape)
     md = mistune.create_markdown(renderer=renderer, plugins=["math"])
 
-    # Override math renderers to use custom HTML escaping.
+    # --- 1. Relax inline math pattern (allow whitespace around $…$) ---
+    md.inline.specification["inline_math"] = (
+        r"\$\s*(?P<math_text>(?:[^$\\]|\\.)+?)\s*\$"
+    )
+    # Clear the compiled regex cache so the new pattern takes effect
+    md.inline._Parser__sc.clear()
+
+    # --- 2. Override math renderers to use custom HTML escaping. ---
     #
     # The mistune math plugin's default renderers HTML-escape math content,
     # which was originally disabled because & -> &amp; was thought to break

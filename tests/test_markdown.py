@@ -269,6 +269,48 @@ def test_render_markdown_math_html_escaping():
     )
 
 
+def test_render_markdown_inline_math_spaces():
+    """Test inline math with whitespace around $ delimiters.
+
+    The upstream mistune math plugin uses ``\\$(?!\\s)…(?!\\s)\\$`` which
+    rejects a space after the opening ``$``. Our override relaxes this
+    to ``\\$\\s*…\\s*\\$`` so that ``$ f(x) $`` (common in LaTeX prose)
+    is parsed correctly.
+    """
+    from A.core.markdown_parser import render_markdown
+
+    # Space after opening $ (was rejected by upstream regex)
+    result = render_markdown("$ f(a)=f(b) $")
+    assert '<span class="math">' in result, (
+        "Expected inline math with space after $ to be parsed"
+    )
+    assert "f(a)=f(b)" in result
+
+    # Space before closing $
+    result = render_markdown("$f(a)=f(b) $")
+    assert '<span class="math">' in result
+
+    # Spaces both sides
+    result = render_markdown("$ f(a)=f(b) $")
+    assert '<span class="math">' in result
+
+    # No spaces (should still work)
+    result = render_markdown("$f(a)=f(b)$")
+    assert '<span class="math">' in result
+
+    # Underscores inside math must NOT be parsed as emphasis
+    result = render_markdown("$a_{b}$")
+    assert '<span class="math">' in result
+    assert "<em>" not in result, (
+        "Underscores inside $...$ must not become <em>"
+    )
+
+    # Realistic LaTeX fragment with space after $
+    result = render_markdown("$ \\text{Let } \\mathbf{x} \\in \\mathbb{R}^d$")
+    assert '<span class="math">' in result
+    assert "<em>" not in result
+
+
 def test_ensure_katex_partial_cleanup(monkeypatch, tmp_path):
     """Test partial download failure is handled gracefully."""
     from A.core.markdown_html_view import _ensure_katex
