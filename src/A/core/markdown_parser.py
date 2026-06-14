@@ -80,14 +80,22 @@ def _make_parser(escape: bool = True) -> mistune.Markdown:
     renderer = HighlightRenderer(escape=escape)
     md = mistune.create_markdown(renderer=renderer, plugins=["math"])
 
-    # Override math renderers to NOT HTML-escape LaTeX content.
-    # The math plugin stores renderers in _BaseRenderer__methods dict.
+    # Override math renderers to use custom HTML escaping.
+    #
+    # The mistune math plugin's default renderers HTML-escape math content,
+    # which was originally disabled because & -> &amp; was thought to break
+    # LaTeX & (alignment marker). However, the browser decodes &amp; back
+    # to & in DOM text nodes, so full HTML escaping is correct and necessary.
+    #
+    # Without proper escaping, characters like < and > in LaTeX (e.g. T_{<l})
+    # are interpreted as HTML tag delimiters, which corrupts the DOM and
+    # prevents KaTeX auto-render from finding math delimiters.
     methods = getattr(renderer, "_BaseRenderer__methods", {})
     methods["inline_math"] = lambda text: (
-        r'<span class="math">\(' + text + r'\)</span>'
+        r'<span class="math">\(' + mistune.escape(text) + r'\)</span>'
     )
     methods["block_math"] = lambda text: (
-        '<div class="math">$$\n' + text + '\n$$</div>\n'
+        '<div class="math">$$\n' + mistune.escape(text) + '\n$$</div>\n'
     )
     return md
 

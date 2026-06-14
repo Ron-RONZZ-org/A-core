@@ -228,6 +228,47 @@ def test_ensure_katex_download(monkeypatch, tmp_path):
     assert "cdn.jsdelivr.net" not in html
 
 
+def test_render_markdown_math_html_escaping():
+    """Test that math content with HTML special chars is properly escaped.
+
+    LaTeX expressions like T_{<l} and alignment markers like & must be
+    HTML-escaped in the output so the browser's HTML parser doesn't
+    interpret them as tag delimiters or entity references. The browser
+    decodes entities back in DOM text nodes, so KaTeX receives correct
+    LaTeX.
+    """
+    from A.core.markdown_parser import render_markdown
+
+    # Block math with < character (e.g. T_{<l} in LaTeX)
+    result = render_markdown("$$\nT_{<l}\n$$")
+    assert '<div class="math">' in result
+    assert "&lt;" in result, (
+        "Expected < to be HTML-escaped to &lt; in math content"
+    )
+    assert "<l" not in result.replace("&lt;", ""), (
+        "Unexpected raw < in math HTML output"
+    )
+
+    # Block math with > character (e.g. \\tau > 0 in LaTeX)
+    result = render_markdown("$$\n\\tau > 0\n$$")
+    assert "&gt;" in result, (
+        "Expected > to be HTML-escaped to &gt; in math content"
+    )
+
+    # Block math with & character (aligned environment)
+    result = render_markdown("$$\n\\begin{aligned}\n&\\text{hello}\n\\end{aligned}\n$$")
+    assert "&amp;" in result, (
+        "Expected & to be HTML-escaped to &amp; in math content"
+    )
+
+    # Inline math with <
+    result = render_markdown("$T_{<l}$")
+    assert '<span class="math">' in result
+    assert "&lt;" in result, (
+        "Expected < to be HTML-escaped in inline math"
+    )
+
+
 def test_ensure_katex_partial_cleanup(monkeypatch, tmp_path):
     """Test partial download failure is handled gracefully."""
     from A.core.markdown_html_view import _ensure_katex
