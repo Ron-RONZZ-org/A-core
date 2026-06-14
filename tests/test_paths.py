@@ -179,6 +179,35 @@ def test_patch_paths_isolates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 # ── Sentinel protection ────────────────────────────────────────────────────────
 
 
+def test_simulate_isolates(tmp_path: Path) -> None:
+    """simulate() redirects data_dir under tmp_path and restores on exit."""
+    from A.core.testing import simulate
+
+    from A.core.paths import data_dir, config_dir, cache_dir, state_dir
+
+    with simulate(tmp_path) as p:
+        assert p == tmp_path
+        assert data_dir() == tmp_path / "data"
+        assert config_dir() == tmp_path / "config"
+        assert cache_dir() == tmp_path / "cache"
+        assert state_dir() == tmp_path / "state"
+
+    # After exit, A_DIR is restored (to whatever the conftest set).
+    # We just verify no exception was raised and cleanup ran.
+
+
+def test_simulate_env_dict(tmp_path: Path) -> None:
+    """simulate() updates an env dict for subprocess testing."""
+    from A.core.testing import simulate
+
+    env: dict[str, str] = {}
+    with simulate(tmp_path, env=env):
+        assert env["A_DIR"] == str(tmp_path)
+
+    # env dict should NOT be cleaned up (caller manages it)
+    assert env["A_DIR"] == str(tmp_path)
+
+
 def test_protect_directory_creates_marker(tmp_path: Path) -> None:
     """protect_directory() creates a .a-protected marker file."""
     d = tmp_path / "protected_dir"
