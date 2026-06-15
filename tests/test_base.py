@@ -150,11 +150,11 @@ def test_open_healthy_db_backup_not_created_on_new(tmp_path: Path):
         db.close()
 
 
-def test_open_healthy_db_healthy_readonly_check(tmp_path: Path):
-    """open_healthy_db's health check uses a read-only connection."""
+def test_health_check_healthy_db(tmp_path: Path):
+    """health_check returns True for a healthy database."""
     from A.data.base import health_check
 
-    db_path = tmp_path / "readonly_check.db"
+    db_path = tmp_path / "healthy.db"
 
     # Create healthy DB
     conn = sqlite3.connect(str(db_path))
@@ -162,7 +162,6 @@ def test_open_healthy_db_healthy_readonly_check(tmp_path: Path):
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.close()
 
-    # health_check should succeed
     assert health_check(db_path) is True
 
 
@@ -178,3 +177,127 @@ def test_open_healthy_db_wal_mode(tmp_path: Path):
         assert row["journal_mode"] in ("wal", "delete")
     finally:
         db.close()
+
+
+# ── health_check WAL replay tests ────────────────────────────────────
+
+
+def test_health_check_replays_wal(tmp_path: Path):
+    """health_check replays WAL from an active connection.
+
+    Previously used ?immutable=1 which bypassed the WAL entirely,
+    so data committed but not yet flushed to the main DB was
+    invisible to the health check.  Now opens a normal connection
+    that replays the WAL automatically.
+    """
+    from A.data.base import health_check
+
+    db_path = tmp_path / "wal_replay.db"
+
+    # Open a connection, enable WAL, write data, but KEEP the
+    # connection open so the WAL is NOT checkpointed.
+    writer = sqlite3.connect(str(db_path))
+    writer.execute("PRAGMA journal_mode=WAL")
+    writer.execute("CREATE TABLE t (v INTEGER)")
+    writer.execute("INSERT INTO t VALUES (42)")
+    writer.commit()
+
+    # Verify writer can see its own data
+    row = writer.execute("SELECT v FROM t").fetchone()
+    assert row[0] == 42
+
+    # A separate ?immutable=1 connection CANNOT see the data
+    # because the WAL hasn't been checkpointed (writer is still open).
+    immutable = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True)
+    with pytest.raises((sqlite3.OperationalError, sqlite3.DatabaseError)):
+        immutable.execute("SELECT v FROM t").fetchone()
+    immutable.close()
+
+    # But health_check (normal connection, replays WAL) should succeed
+    assert health_check(db_path) is True
+
+    # After health_check, the data should be in the main DB (TRUNCATE checkpoint)
+    reader = sqlite3.connect(str(db_path))
+    row = reader.execute("SELECT v FROM t").fetchone()
+    assert row[0] == 42
+    reader.close()
+
+    writer.close()
+
+
+def test_health_check_corrupted_file(tmp_path: Path):
+    """health_check returns False for a corrupted database file."""
+    from A.data.base import health_check
+
+    db_path = tmp_path / "corrupted_health.db"
+    # Write garbage that looks like a SQLite header
+    db_path.write_bytes(b"SQLite format 3\x00" + b"\x00" * 200)
+    assert health_check(db_path) is False
+
+
+def test_health_check_non_existent(tmp_path: Path):
+    """health_check returns True for a non-existent file (can't be corrupted)."""
+    from A.data.base import health_check
+
+    assert health_check(tmp_path / "nonexistent.db") is True
+
+
+# ── backup_db tests ──────────────────────────────────────────────────
+
+
+def test_backup_db_creates_bak(tmp_path: Path):
+    """backup_db creates a .bak file with valid SQLite content."""
+    from A.data.base import backup_db, health_check
+
+    db_path = tmp_path / "test_backup.db"
+
+    # Create a healthy database
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("CREATE TABLE t (v INTEGER)")
+    conn.execute("INSERT INTO t VALUES (42)")
+    conn.commit()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    conn.close()
+
+    backup_db(db_path)
+
+    bak_path = db_path.with_suffix(".db.bak")
+    assert bak_path.exists(), "backup_db should create a .bak file"
+    assert health_check(bak_path) is True, "backup should be a valid SQLite DB"
+
+
+def test_backup_db_with_wal_data(tmp_path: Path):
+    """backup_db flushes WAL before copy, so backup includes recent writes."""
+    from A.data.base import backup_db, health_check
+
+    db_path = tmp_path / "wal_backup.db"
+
+    # Create DB in WAL mode with uncheckpointed data
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t (v INTEGER)")
+    conn.execute("INSERT INTO t VALUES (42)")
+    conn.commit()
+    conn.close()
+
+    # backup_db should checkpoint (TRUNCATE) before copying
+    backup_db(db_path)
+
+    bak_path = db_path.with_suffix(".db.bak")
+    assert bak_path.exists()
+    assert health_check(bak_path) is True
+
+    # Verify the backup contains the data
+    reader = sqlite3.connect(str(bak_path))
+    reader.row_factory = sqlite3.Row
+    row = reader.execute("SELECT v FROM t").fetchone()
+    assert row["v"] == 42, "backup should contain the committed data"
+    reader.close()
+
+
+def test_backup_db_non_existent(tmp_path: Path):
+    """backup_db does nothing for a non-existent file (no crash)."""
+    from A.data.base import backup_db
+
+    # Should not raise any exception
+    backup_db(tmp_path / "nonexistent.db")

@@ -256,19 +256,41 @@ class SQLiteDB:
 def backup_db(db_path: Path) -> None:
     """Snapshot *db_path* to ``<name>.bak`` before schema-altering operations.
 
-    Best-effort: silently ignores missing files and copy failures.
-    The backup is overwritten on each call (one rolling backup per DB).
+    Forces a ``TRUNCATE`` WAL checkpoint before the copy so the
+    backup reflects the **full** database state including all
+    committed WAL transactions.
+
+    Best-effort: silently ignores missing files, checkpoint failures,
+    and copy failures. The backup is overwritten on each call (one
+    rolling backup per DB).
     """
-    if db_path.exists():
-        bak = db_path.with_suffix(".db.bak")
-        try:
-            shutil.copy2(str(db_path), str(bak))
-        except Exception:
-            pass  # Backup is best-effort
+    if not db_path.exists():
+        return
+    # Flush WAL so the copy captures all committed transactions
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        conn.close()
+    except Exception:
+        pass  # Best-effort: a stale backup is better than no backup
+    bak = db_path.with_suffix(".db.bak")
+    try:
+        shutil.copy2(str(db_path), str(bak))
+    except Exception:
+        pass  # Backup is best-effort
 
 
 def health_check(db_path: Path) -> bool:
-    """Run ``PRAGMA quick_check`` on *db_path* via a read-only connection.
+    """Run ``PRAGMA quick_check`` on *db_path*.
+
+    Opens a normal connection (which replays the WAL) and runs a
+    ``TRUNCATE`` checkpoint before checking integrity.  This ensures
+    the health check reflects the **full** database state including
+    all committed WAL transactions.
+
+    Previously used ``?immutable=1`` (read-only, no WAL replay),
+    which could report a stale main-db snapshot as healthy while
+    pending WAL transactions hid latent corruption.
 
     Returns ``True`` if the database is healthy, ``False`` if corrupted
     or unreachable.
@@ -276,7 +298,9 @@ def health_check(db_path: Path) -> bool:
     if not db_path.exists():
         return True  # Non-existent DB can't be corrupted
     try:
-        conn = sqlite3.connect(f"file:{db_path}?immutable=1", uri=True, timeout=5)
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        # Flush WAL so quick_check sees the complete state
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         (result,) = conn.execute("PRAGMA quick_check").fetchone()
         conn.close()
         return result == "ok"
