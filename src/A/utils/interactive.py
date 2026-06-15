@@ -113,9 +113,21 @@ def select_candidate(
     if not raw.strip():
         return None
 
+    # Split space-separated input; warn if multiple numbers given.
+    # select_candidate is single-select, so multi-number input is treated
+    # as a user error (use select_candidates for multi-select).
+    tokens = raw.strip().split()
+    if len(tokens) > 1:
+        from A.utils.output import warning as _warn
+        _warn(tr_multi(
+            "Nur la unua numero estos uzata (vi entajpis: {t})",
+            "Only the first number will be used (you entered: {t})",
+            "Seul le premier numéro sera utilisé (vous avez saisi : {t})",
+        ).format(t=raw.strip()))
+
     try:
-        idx = int(raw.strip()) - 1
-    except ValueError:
+        idx = int(tokens[0]) - 1
+    except (ValueError, IndexError):
         return None
 
     if 0 <= idx < len(candidates):

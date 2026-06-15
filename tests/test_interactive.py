@@ -131,6 +131,36 @@ def test_select_row_formatter_called(mock_prompt):
     assert calls == [("a", 1), ("b", 2)]
 
 
+@patch("A.utils.interactive.typer.prompt")
+@patch("A.utils.output.warning")
+def test_select_multi_number_graceful(mock_warning, mock_prompt):
+    """Space-separated input selects first item, emits warning."""
+    candidates = ["apple", "banana", "cherry"]
+    mock_prompt.return_value = "2 3"
+
+    result = select_candidate(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    idx, item = result
+    assert idx == 1
+    assert item == "banana"
+    mock_warning.assert_called_once()
+
+
+@patch("A.utils.interactive.typer.prompt")
+@patch("A.utils.output.warning")
+def test_select_multi_number_whitespace_variations(mock_warning, mock_prompt):
+    """Extra whitespace and mixed spacing handled correctly."""
+    candidates = ["a", "b", "c"]
+    mock_prompt.return_value = "  3   1  "
+
+    result = select_candidate(candidates, columns=COLUMNS, row_formatter=_simple_formatter)
+    assert result is not None
+    idx, item = result
+    assert idx == 2
+    assert item == "c"
+    mock_warning.assert_called_once()
+
+
 # ── confirm_action ───────────────────────────────────────────────────────────
 
 
