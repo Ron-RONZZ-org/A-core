@@ -289,8 +289,9 @@ def repair_db(db_path: Path) -> bool:
 
     1. Deletes stale WAL/SHM files.
     2. Runs ``PRAGMA quick_check``.
-    3. If still corrupted, runs ``VACUUM`` to rebuild the file.
-    4. If VACUUM fails, attempts to drop and recreate the
+    3. If still corrupted, runs ``VACUUM`` to rebuild the file and
+       then ``REINDEX`` to rebuild any corrupted indexes.
+    4. If that fails, attempts to drop and recreate the
        ``semantika_cache`` table (A-encik specific, safe no-op elsewhere).
 
     Returns ``True`` if the DB is healthy after repair, ``False`` otherwise.
@@ -308,9 +309,10 @@ def repair_db(db_path: Path) -> bool:
         if result == "ok":
             conn.close()
             return True
-        # Try VACUUM rebuild
+        # Try VACUUM rebuild + REINDEX (fixes orphan pages AND corrupted indexes)
         try:
             conn.execute("VACUUM")
+            conn.execute("REINDEX")
             (result,) = conn.execute("PRAGMA quick_check").fetchone()
             if result == "ok":
                 conn.close()
