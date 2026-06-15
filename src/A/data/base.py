@@ -421,11 +421,56 @@ def init_db(
     return db
 
 
+def open_healthy_db(
+    path: Path,
+    *,
+    backup: bool = True,
+) -> SQLiteDB:
+    """Open a database with health check, auto-repair, and pre-DDL backup.
+
+    This is the canonical way to open a database in A-modules.  It
+    composes three steps that every module would otherwise repeat:
+
+    1. **Health check** — runs ``PRAGMA quick_check`` via a read-only
+       connection so corruption is detected *before* ``SQLiteDB``
+       opens the database and potentially crashes.
+    2. **Auto-repair** — if the health check fails, stale WAL/SHM files
+       are deleted and ``VACUUM`` is attempted.
+    3. **Pre-DDL backup** — creates a timestamped backup (via
+       :func:`A.core.backup.backup_database`) so the pre-migration
+       state is captured regardless of schema changes that follow.
+
+    Args:
+        path: Full path to the database file.
+        backup: If ``True`` (default), create a timestamped backup of
+            the existing database before returning.  The backup is
+            created *after* repair so the repaired state is preserved.
+
+    Returns:
+        A ready-to-use ``SQLiteDB`` instance (WAL mode, FK enforced,
+        per-thread connection caching).
+
+    Raises:
+        RuntimeError: If the database is corrupted and cannot be
+            repaired.
+    """
+    if not health_check(path):
+        if not repair_db(path):
+            raise RuntimeError(
+                f"Database {path} is corrupted and could not be repaired.\n"
+                "Restore from backup or delete the file to start fresh."
+            )
+    if backup:
+        backup_db(path)
+    return SQLiteDB(path)
+
+
 __all__ = [
     "SQLiteDB",
     "backup_db",
     "health_check",
-    "repair_db",
+    "open_healthy_db",
     "readonly_recover",
+    "repair_db",
     "init_db",
 ]
