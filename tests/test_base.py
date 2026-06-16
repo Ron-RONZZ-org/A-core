@@ -71,16 +71,16 @@ def test_open_healthy_db_healthy(tmp_path: Path):
         db.close()
 
 
-def test_open_healthy_db_corrupted_raises(tmp_path: Path):
-    """open_healthy_db raises RuntimeError when DB is too corrupted."""
+def test_open_healthy_db_corrupted_passes_through(tmp_path: Path):
+    """open_healthy_db opens even a corrupted DB (health check removed)."""
     from A.data.base import open_healthy_db
 
     db_path = tmp_path / "corrupted.db"
-    # Create a corrupted file
     db_path.write_bytes(b"SQLite format 3\x00" + b"\x00" * 200)
 
-    with pytest.raises(RuntimeError, match="corrupted"):
-        open_healthy_db(db_path)
+    # No health check on open — just passes through to SQLiteDB
+    db = open_healthy_db(db_path)
+    assert db.path == db_path
 
 
 def test_open_healthy_db_wal_shm_repair(tmp_path: Path):

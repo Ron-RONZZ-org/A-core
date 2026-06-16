@@ -225,47 +225,38 @@ def init_db(
 def open_healthy_db(
     path: Path,
     *,
-    backup: bool = True,
+    backup: bool = False,
 ) -> Any:
-    """Open a database with health check, auto-repair, and pre-DDL backup.
+    """Open a database, optionally with health check and backup.
 
-    This is the canonical way to open a database in A-modules.  It
-    composes three steps that every module would otherwise repeat:
+    .. caution::
 
-    1. **Health check** — runs ``PRAGMA quick_check`` via a read-only
-       connection so corruption is detected *before* ``SQLiteDB``
-       opens the database and potentially crashes.
-    2. **Auto-repair** — if the health check fails, stale WAL/SHM files
-       are deleted and ``VACUUM`` is attempted.
-    3. **Pre-DDL backup** — creates a timestamped backup (via
-       :func:`A.core.backup.backup_database`) so the pre-migration
-       state is captured regardless of schema changes that follow.
+       This function has been simplified — it no longer runs a health
+       check or creates a rolling backup by default, because opening
+       extra connections during DB open was observed to cause database
+       corruption in WAL mode.  Pass ``backup=True`` explicitly to
+       create a rolling ``.bak`` *after* the database is closed.
 
     Args:
         path: Full path to the database file.
-        backup: If ``True`` (default), create a timestamped backup of
-            the existing database before returning.  The backup is
-            created *after* repair so the repaired state is preserved.
+        backup: If ``True``, create a timestamped backup via
+            :func:`A.core.backup.backup_database` after opening.
+            Default ``False`` (no extra operations during open).
 
     Returns:
         A ready-to-use ``SQLiteDB`` instance (WAL mode, FK enforced,
         per-thread connection caching).
-
-    Raises:
-        RuntimeError: If the database is corrupted and cannot be
-            repaired.
     """
     from .base import SQLiteDB  # noqa: PLC0415 — lazy import to avoid circular deps
 
-    if not health_check(path):
-        if not repair_db(path):
-            raise RuntimeError(
-                f"Database {path} is corrupted and could not be repaired.\n"
-                "Restore from backup or delete the file to start fresh."
-            )
+    db = SQLiteDB(path)
     if backup:
-        backup_db(path)
-    return SQLiteDB(path)
+        try:
+            from A.core.backup import backup_database as _backup_database
+            _backup_database(path)
+        except Exception:
+            pass
+    return db
 
 
 __all__ = [

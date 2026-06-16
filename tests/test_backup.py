@@ -367,34 +367,20 @@ def _sqlite_db_exists(module: str) -> int:
     return len(list(d.glob("*.db")))
 
 
-def test_sqlitedb_auto_backup_on_init_when_db_exists(tmp_path: Path) -> None:
-    """SQLiteDB backs up existing DB on init."""
+def test_sqlitedb_no_auto_backup_on_init(tmp_path: Path) -> None:
+    """SQLiteDB does NOT back up on init (auto-backup removed to avoid corruption)."""
     from A.data.base import SQLiteDB
 
     db_path = tmp_path / "existing.db"
-    # Create a pre-existing database
     db1 = SQLiteDB(db_path)
     db1.execute("CREATE TABLE t (x TEXT)")
     db1.execute("INSERT INTO t VALUES ('hello')")
     db1.close()
 
-    count_before = _sqlite_db_exists("existing")
-    assert count_before == 0  # first init: no backup (no prior DB)
-
-    # Re-open same DB — should auto-backup
+    # Re-open same DB — should NOT auto-backup
     db2 = SQLiteDB(db_path)
     db2.close()
-    assert _sqlite_db_exists("existing") == 1
-
-    # Verify backup content
-    backups = list_backups("existing")
-    assert len(backups) == 1
-    # The backup was created from the DB with "hello"
-    import sqlite3
-    restored = sqlite3.connect(str(backups[0]["path"]))
-    (value,) = restored.execute("SELECT x FROM t").fetchone()
-    assert value == "hello"
-    restored.close()
+    assert _sqlite_db_exists("existing") == 0
 
 
 def test_sqlitedb_no_backup_on_first_init(tmp_path: Path) -> None:
@@ -410,8 +396,8 @@ def test_sqlitedb_no_backup_on_first_init(tmp_path: Path) -> None:
     assert _sqlite_db_exists("fresh") == 0
 
 
-def test_sqlitedb_auto_backup_before_ddl(tmp_path: Path) -> None:
-    """SQLiteDB backs up before DDL statements."""
+def test_sqlitedb_no_auto_backup_before_ddl(tmp_path: Path) -> None:
+    """SQLiteDB does NOT back up before DDL (auto-backup removed)."""
     from A.data.base import SQLiteDB
 
     db_path = tmp_path / "ddl_test.db"
@@ -420,19 +406,14 @@ def test_sqlitedb_auto_backup_before_ddl(tmp_path: Path) -> None:
     db.execute("INSERT INTO t VALUES ('pre-ddl')")
     db.close()
 
-    # Re-open and run ALTER TABLE — should trigger backup
     db2 = SQLiteDB(db_path)
-    count_after_init = _sqlite_db_exists("ddl_test")
-    assert count_after_init == 1  # auto-backup on init
-
     db2.execute("ALTER TABLE t ADD COLUMN y TEXT")
-    # Should have triggered ANOTHER backup before the DDL
-    assert _sqlite_db_exists("ddl_test") == 2
+    assert _sqlite_db_exists("ddl_test") == 0  # no backup on init or DDL
     db2.close()
 
 
-def test_sqlitedb_no_backup_on_select(tmp_path: Path) -> None:
-    """SQLiteDB does NOT back up on SELECT statements."""
+def test_sqlitedb_no_backup_at_all(tmp_path: Path) -> None:
+    """SQLiteDB does NOT trigger backups on any operation."""
     from A.data.base import SQLiteDB
 
     db_path = tmp_path / "select_test.db"
@@ -441,28 +422,26 @@ def test_sqlitedb_no_backup_on_select(tmp_path: Path) -> None:
     db.execute("INSERT INTO t VALUES ('data')")
     db.close()
 
-    # Re-open — triggers 1 backup on init
+    # Re-open — no backup
     db2 = SQLiteDB(db_path)
-    assert _sqlite_db_exists("select_test") == 1
+    assert _sqlite_db_exists("select_test") == 0
 
-    # SELECT should NOT trigger backup
+    # SELECT still works
     rows = db2.execute("SELECT * FROM t")
     assert rows == [{"x": "data"}]
-    assert _sqlite_db_exists("select_test") == 1  # still 1
+    assert _sqlite_db_exists("select_test") == 0
 
-    # INSERT (DML) should NOT trigger backup
+    # INSERT still works
     db2.execute("INSERT INTO t VALUES ('more')")
-    assert _sqlite_db_exists("select_test") == 1  # still 1
-
+    assert _sqlite_db_exists("select_test") == 0
     db2.close()
 
 
-def test_sqlitedb_module_explicit(tmp_path: Path) -> None:
-    """SQLiteDB(module=...) uses the explicit module name for backups."""
+def test_sqlitedb_module_no_backup(tmp_path: Path) -> None:
+    """SQLiteDB accepts module= but does NOT back up (removed feature)."""
     from A.data.base import SQLiteDB
 
     db_path = tmp_path / "any_name.db"
-    # Create pre-existing DB
     db1 = SQLiteDB(db_path)
     db1.execute("CREATE TABLE t (x TEXT)")
     db1.execute("INSERT INTO t VALUES ('v')")
@@ -470,40 +449,4 @@ def test_sqlitedb_module_explicit(tmp_path: Path) -> None:
 
     db2 = SQLiteDB(db_path, module="custom_module")
     db2.close()
-    assert _sqlite_db_exists("custom_module") == 1
-
-
-def test_sqlitedb_module_path_derived(tmp_path: Path) -> None:
-    """SQLiteDB derives module name from path under data_dir()."""
-    from A.data.base import SQLiteDB
-    from A.core.paths import data_dir
-
-    mod_dir = data_dir() / "my_mod"
-    mod_dir.mkdir(parents=True, exist_ok=True)
-    db_path = mod_dir / "data.db"
-
-    # Create pre-existing DB
-    db1 = SQLiteDB(db_path)
-    db1.execute("CREATE TABLE t (x TEXT)")
-    db1.execute("INSERT INTO t VALUES ('v')")
-    db1.close()
-
-    db2 = SQLiteDB(db_path)
-    db2.close()
-    assert _sqlite_db_exists("my_mod") == 1
-
-
-def test_sqlitedb_module_stem_fallback(tmp_path: Path) -> None:
-    """SQLiteDB falls back to filename stem when path is outside data_dir()."""
-    from A.data.base import SQLiteDB
-
-    db_path = tmp_path / "custom_name.db"
-    # Create pre-existing DB
-    db1 = SQLiteDB(db_path)
-    db1.execute("CREATE TABLE t (x TEXT)")
-    db1.execute("INSERT INTO t VALUES ('v')")
-    db1.close()
-
-    db2 = SQLiteDB(db_path)
-    db2.close()
-    assert _sqlite_db_exists("custom_name") == 1
+    assert _sqlite_db_exists("custom_module") == 0
