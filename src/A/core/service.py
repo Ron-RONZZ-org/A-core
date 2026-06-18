@@ -200,9 +200,14 @@ class CRUDService:
         """Index a single entry in FTS5."""
         if not self._fts_config:
             return
-        # Get current values for FTS columns
+        # Get current values for FTS columns.
+        # NOTE: Use ``rowid AS rowid`` so the column name is always ``rowid``
+        # in the result dict, regardless of PK type.  SQLite normalizes bare
+        # ``SELECT rowid`` to the actual column name for ``INTEGER PRIMARY KEY``
+        # tables (e.g. ``id`` instead of ``rowid``), which would cause a
+        # ``KeyError`` on ``entry["rowid"]`` below.
         entry = self.db.execute_one(
-            f"SELECT rowid, uuid, "
+            f"SELECT rowid AS rowid, uuid, "
             f"{', '.join(self._fts_config.fts_columns)} "
             f"FROM {self.table} WHERE uuid = ?",
             (uuid,)
@@ -224,9 +229,11 @@ class CRUDService:
         """
         if not self._fts_config:
             return
-        # Look up rowid first to avoid passing NULL to FTS5
+        # Look up rowid first to avoid passing NULL to FTS5.
+        # Use ``rowid AS rowid`` to handle INTEGER PRIMARY KEY tables
+        # where bare ``SELECT rowid`` returns the PK column name instead.
         row = self.db.execute_one(
-            f"SELECT rowid FROM {self.table} WHERE uuid = ?",
+            f"SELECT rowid AS rowid FROM {self.table} WHERE uuid = ?",
             (uuid,)
         )
         if not row or row.get("rowid") is None:
