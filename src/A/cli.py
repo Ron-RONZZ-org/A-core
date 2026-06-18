@@ -13,7 +13,7 @@ from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
 from A.utils import info, success, error, warning, console
-from A.utils.interactive import select_candidate, confirm_action, confirm_action
+from A.utils.interactive import select_candidate, confirm_action
 
 
 # ── Lazy Plugin Loading ──────────────────────────────────────────────────────
@@ -76,14 +76,27 @@ class LazyPluginGroup(typer.main.TyperGroup):
         if cmd is not None:
             return cmd
 
-        # First access — load from entry point
+        # Direct entry point match
         if cmd_name in _PLUGIN_ENTRY_POINTS:
             click_cmd = _load_plugin(cmd_name)
             if click_cmd is not None:
                 self.add_command(click_cmd, name=cmd_name)
                 return click_cmd
-            # Load failed — remove so we don't try again
             _PLUGIN_ENTRY_POINTS.pop(cmd_name, None)
+            return None
+
+        # Fallback: search entry points by the command's displayed name
+        # (e.g. entry point "kunpiloto" registers a Typer app whose
+        # click command has .name="repl").  Helps when format_commands
+        # displays cmd.name but the user types what they see.
+        for ep_name in list(_PLUGIN_ENTRY_POINTS):
+            click_cmd = _load_plugin(ep_name)
+            if click_cmd is not None and click_cmd.name == cmd_name:
+                self.add_command(click_cmd, name=ep_name)
+                return click_cmd
+            if click_cmd is not None:
+                # Already loaded — add it so we don't re-load next time
+                self.add_command(click_cmd, name=ep_name)
 
         return None
 
