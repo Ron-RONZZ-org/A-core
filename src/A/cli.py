@@ -1,10 +1,10 @@
 """A CLI main entry point."""
 
+import importlib.metadata
 from typing import Callable
 
 import typer
 from rich.table import Table
-from rich.box import SIMPLE as BOX_SIMPLE
 from rich.panel import Panel
 
 from A import tr, tr_multi
@@ -12,13 +12,87 @@ from A.core.paths import ensure_dirs
 from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
-from A.core.plugin_loader import (
-    _PLUGIN_ENTRY_POINTS,
-    discover_plugin_names,
-    LazyPluginGroup,
-)
 from A.utils import info, success, error, warning, console
-from A.utils.interactive import select_candidate
+from A.utils.interactive import select_candidate, confirm_action
+
+
+# ── Lazy Plugin Loading ──────────────────────────────────────────────────────
+# Entry points discovered by name only — plugins are loaded on first command use.
+# This means `A retposto ls` won't trigger loading A-sistemo (or other plugins).
+
+_PLUGIN_ENTRY_POINTS: dict[str, importlib.metadata.EntryPoint] = {}
+
+
+def _discover_plugin_names() -> dict[str, importlib.metadata.EntryPoint]:
+    """Discover plugin entry points without loading them.
+
+    Returns: dict mapping plugin name → EntryPoint
+    """
+    try:
+        eps = importlib.metadata.entry_points(group="A.commands")
+    except TypeError:
+        # Python < 3.10
+        eps = importlib.metadata.entry_points().get("A.commands", [])
+    return {ep.name: ep for ep in eps}
+
+
+def _load_plugin(name: str) -> typer.main.TyperGroup | None:
+    """Load a plugin by name, returning a Click/Typer command or None on failure."""
+    ep = _PLUGIN_ENTRY_POINTS.get(name)
+    if ep is None:
+        return None
+    try:
+        real = ep.load()
+        if not isinstance(real, typer.Typer):
+            error(tr_multi(
+                f"Nevalida kromprogramo '{name}': ne estas Typer-apliko",
+                f"Invalid plugin '{name}': not a Typer app",
+                f"Plugin '{name}' invalide: n'est pas une application Typer",
+            ))
+            return None
+        return typer.main.get_command(real)
+    except Exception as e:
+        error(tr_multi(
+            f"Malsukcesis sxargi '{name}': {e}",
+            f"Failed to load '{name}': {e}",
+            f"Echec du chargement de '{name}': {e}",
+        ))
+        return None
+
+
+class LazyPluginGroup(typer.main.TyperGroup):
+    """Click Group that lazy-loads A plugins on first invocation.
+
+    Plugins are not imported at startup — only when the user runs a command
+    that belongs to that plugin. Failed loads are silently dropped from the
+    command list.
+    """
+
+    def get_command(
+        self, ctx: typer.Context, cmd_name: str
+    ) -> typer.main.TyperGroup | None:
+        # Already loaded (built-in command or previously cached)?
+        cmd = super().get_command(ctx, cmd_name)
+        if cmd is not None:
+            return cmd
+
+        # First access — load from entry point
+        if cmd_name in _PLUGIN_ENTRY_POINTS:
+            click_cmd = _load_plugin(cmd_name)
+            if click_cmd is not None:
+                self.add_command(click_cmd, name=cmd_name)
+                return click_cmd
+            # Load failed — remove so we don't try again
+            _PLUGIN_ENTRY_POINTS.pop(cmd_name, None)
+
+        return None
+
+    def list_commands(self, ctx: typer.Context) -> list[str]:
+        cmds = list(super().list_commands(ctx))
+        for name in _PLUGIN_ENTRY_POINTS:
+            if name not in cmds:
+                cmds.append(name)
+        return [c for c in cmds if not c.startswith("_")]
 
 
 # ── Main App ─────────────────────────────────────────────────────────────────
@@ -97,11 +171,6 @@ def _register_migrations() -> None:
             warning(f"failed to register migration for {module}: {e}")
 
 
-# ── Uzanto Sub-App ──────────────────────────────────────────────────────────
-
-from A.core.uzanto_cli import app as uzanto_app  # noqa: E402
-app.add_typer(uzanto_app, name="uzanto")
-
 # ── Migration Sub-App ───────────────────────────────────────────────────────
 
 migri_app = typer.Typer(
@@ -124,10 +193,18 @@ def migri_callback(ctx: typer.Context) -> None:
     results = migrate_all()
 
     if not results:
-        info("Neniuj migrationoj haveblas.")
+        info(tr_multi(
+            "Neniuj migradoj haveblas.",
+            "No migrations available.",
+            "Aucune migration disponible.",
+        ))
         return
 
-    success("Rezultoj de migrado:")
+    success(tr_multi(
+        "Rezultoj de migrado:",
+        "Migration results:",
+        "Résultats de la migration:",
+    ))
     for module, result in results.items():
         if result.skipped:
             info(f"  {module}: saltita ({result.skipped_reason})")
@@ -160,11 +237,23 @@ def show_migration_status() -> None:
     discovered = _discover_migrations()
 
     if not discovered:
-        info("Neniuj migr-moduloj trovite.")
-        info("Instalu A-modulojn kun migr-ad funkcioj.")
+        info(tr_multi(
+            "Neniuj migr-moduloj trovite.",
+            "No migration modules found.",
+            "Aucun module de migration trouvé.",
+        ))
+        info(tr_multi(
+            "Instalu A-modulojn kun migradaj funkcioj.",
+            "Install A-modules with migration features.",
+            "Installez des modules A avec fonctions de migration.",
+        ))
         return
 
-    success(f"Migrada stato ({len(discovered)} moduloj):")
+    success(tr_multi(
+        f"Migrada stato ({len(discovered)} moduloj):",
+        f"Migration status ({len(discovered)} modules):",
+        f"Statut de migration ({len(discovered)} modules):",
+    ))
 
     status_map = get_status()
 
@@ -182,9 +271,31 @@ def show_migration_status() -> None:
 
 
 def _get_pip_command():
-    """Find the best available pip command."""
-    from A.utils.deps import get_pip_command
-    return get_pip_command()
+    """Find the best available pip command, respecting venv isolation.
+    
+    Returns:
+        list: pip command arguments ready for subprocess
+    """
+    import shutil, os
+    
+    # 1. Try uv pip first (uv-managed venvs preserve isolation)
+    uv_cmd = shutil.which("uv")
+    if uv_cmd:
+        return [uv_cmd, "pip"]
+    
+    # 2. Try pip in PATH
+    pip_cmd = shutil.which("pip") or shutil.which("pip3")
+    if pip_cmd:
+        return [pip_cmd]
+    
+    # 3. Try python3 -m pip
+    python3 = shutil.which("python3")
+    if python3:
+        return [python3, "-m", "pip"]
+    
+    # 4. Last resort: sys.executable (may break isolation in broken venvs)
+    import sys
+    return [sys.executable, "-m", "pip"]
 
 
 def _ensure_keyring() -> bool:
@@ -193,12 +304,41 @@ def _ensure_keyring() -> bool:
     Returns:
         True if keyring is available, False if user declined.
     """
-    from A.utils.deps import ensure_dependency
+    import importlib
     try:
-        ensure_dependency("keyring")
+        importlib.import_module("keyring")
         return True
     except ImportError:
-        return False
+        from A import tr_multi
+
+        answer = confirm_action(
+            tr_multi(
+                "Bezonas 'keyring' bibliotekon. Ĉu instali ĝin nun?",
+                "The 'keyring' library is required. Install it now?",
+                "La bibliothèque 'keyring' est nécessaire. Installer maintenant ?",
+            ),
+            default=True,
+        )
+        if not answer:
+            return False
+
+        try:
+            import subprocess
+            pip_cmd = _get_pip_command()
+            subprocess.check_call(
+                pip_cmd + ["install", "keyring"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            importlib.import_module("keyring")
+            return True
+        except Exception as e:
+            error(tr_multi(
+                f"Malsukcesis instali 'keyring': {e}",
+                f"Failed to install 'keyring': {e}",
+                f"Échec de l'installation de 'keyring': {e}",
+            ))
+            return False
 
 
 # ── Modulo sub-app ────────────────────────────────────────────────────────────
@@ -260,10 +400,10 @@ def modulo_ls(
             ))
             return
 
-        table = Table(show_header=True, box=BOX_SIMPLE)
-        table.add_column("#", width=3)
+        table = Table(show_header=True, header_style="dim", box=None)
+        table.add_column("#", style="dim", width=3)
         table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
-        table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"))
+        table.add_column(tr_multi("Pip-paketo", "Pip package", "Paquet pip"), style="dim")
 
         for i, m in enumerate(modules, 1):
             table.add_row(str(i), m.get("display_name", m["name"]), m.get("pip", ""))
@@ -283,14 +423,14 @@ def modulo_ls(
     installed_names = {m["name"] for m in get_installed_modules()}
     all_modules = sorted(data.get("modules", []), key=lambda m: m.get("name", ""))
 
-    table = Table(show_header=True, box=BOX_SIMPLE)
-    table.add_column("#", width=3)
+    table = Table(show_header=True, header_style="dim", box=None)
+    table.add_column("#", style="dim", width=3)
     table.add_column(tr_multi("Nomo", "Name", "Nom"), style="bold")
     table.add_column(
-        tr_multi("Priskribo", "Description", "Description")
+        tr_multi("Priskribo", "Description", "Description"), style="dim"
     )
     table.add_column(
-        tr_multi("Stato", "Status", "\u00c9tat"), width=12
+        tr_multi("Stato", "Status", "\u00c9tat"), style="dim", width=12
     )
 
     for i, m in enumerate(all_modules, 1):
@@ -442,64 +582,12 @@ def modulo_info(
 app.add_typer(modulo_app, name="modulo")
 
 
-@app.command("repl")
-def repl(
-    ctx: typer.Context,
-    module_name: str = typer.Argument(
-        ...,
-        help=tr_multi(
-            "Nomo de la modulo por eniri REPL-re\u011dimon",
-            "Module name to enter REPL mode",
-            "Nom du module pour entrer en mode REPL",
-        ),
-    ),
-) -> None:
-    """Eniri interagan REPL-re\u011dimon por A-modulo.
-
-    In the REPL, type subcommands directly without the 'A <module>' prefix.
-    Use 'exit' or Ctrl+D to quit, '!' for shell commands.
-    """
-    from A.core.plugin_loader import _PLUGIN_ENTRY_POINTS, get_plugin_app
-    from A.utils.repl import ModuleREPL
-
-    if module_name not in _PLUGIN_ENTRY_POINTS:
-        error(tr_multi(
-            f"Modulo '{module_name}' ne estas instalita a\u016d trovita.",
-            f"Module '{module_name}' is not installed or not found.",
-            f"Module '{module_name}' n'est pas install\u00e9 ou introuvable.",
-        ))
-        raise typer.Exit(1)
-
-    app = get_plugin_app(module_name)
-    if app is None:
-        error(tr_multi(
-            f"Ne eblas \u015dargi modulon '{module_name}'.",
-            f"Cannot load module '{module_name}'.",
-            f"Impossible de charger le module '{module_name}'.",
-        ))
-        raise typer.Exit(1)
-
-    # Derive the module path and attribute name from the entry point
-    # (not app.__module__, which points to typer.main — the Typer class
-    # module). Entry point value format: "module:attr" e.g. "A_lien.cli:retposto"
-    ep = _PLUGIN_ENTRY_POINTS[module_name]
-    mod_path = ep.value.split(":", 1)[0]
-    mod_attr = ep.value.split(":", 1)[1] if ":" in ep.value else "app"
-
-    ModuleREPL(
-        module_name=module_name,
-        module_app=app,
-        module_path=mod_path,
-        module_attr=mod_attr,
-    ).cmdloop()
-
-
 def main():
     """Main entry point."""
     ensure_dirs()
 
     # Populate plugin entry points (names only — no module loading)
-    _PLUGIN_ENTRY_POINTS.update(discover_plugin_names())
+    _PLUGIN_ENTRY_POINTS.update(_discover_plugin_names())
 
     # Run — plugins loaded lazily on first use
     app()
