@@ -6,6 +6,8 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import Any
 
+from A.core.paths import data_dir
+
 # Re-export DB hardening utilities from the dedicated module.
 # These were moved to keep this file under 500 lines.
 from A.data.harden import (  # noqa: F401 — public API re-export
