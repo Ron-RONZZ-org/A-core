@@ -6,7 +6,7 @@ from A.core.paths import ensure_dirs
 from A.core.exceptions import AError
 from A.core.service import CRUDService, create_service
 from A.core.undo import UndoManager, UndoOperation, create_undo_operation
-from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links, bulk_add_links
+from A.core.links import Link, get_links_db, add_link, remove_link, get_outgoing, get_incoming, get_links
 from A.core.references import Ref, ResolvedRef, parse_refs, resolve, get_ref_display, clear_ref_cache
 from A.core.ai import get_provider, save_api_key, get_api_key
 from A.core.registry import fetch_registry, search_registry, get_module_info, get_installed_modules
@@ -67,7 +67,6 @@ __all__ = [
     "get_links_db",
     "add_link",
     "remove_link",
-    "bulk_add_links",
     "get_outgoing",
     "get_incoming",
     "get_links",

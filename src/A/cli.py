@@ -13,7 +13,7 @@ from A.core.migration import get_status, migrate_all, MigrationStatus
 from A.core.registry import fetch_registry, get_module_info, get_installed_modules, search_registry
 from A.core.markdown_parser import render_markdown
 from A.utils import info, success, error, warning, console
-from A.utils.interactive import select_candidate, confirm_action
+from A.utils.interactive import select_candidate, confirm_action, confirm_action
 
 
 # ── Lazy Plugin Loading ──────────────────────────────────────────────────────

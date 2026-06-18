@@ -4,11 +4,16 @@ Provides adjacency list storage for cross-module links.
 When entry A links to entry B, the link is stored and queryable
 in both directions (outgoing from A, incoming to B).
 """
+from __future__ import annotations
 
 import functools
 import random
-import sqlite3
 import time
+from typing import Any
+
+
+
+
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterator
@@ -36,56 +41,6 @@ LINKS_SCHEMA = {
 }
 
 
-def _retry_on_lock(
-    retries: int = 20,
-    base_delay: float = 0.5,
-    max_delay: float = 10.0,
-    jitter: float = 0.3,
-):
-    """Decorator: retry a method on ``sqlite3.OperationalError`` (DB locked).
-
-    Does **not** close the cached connection — a busy timeout does not
-    corrupt it.  The same connection is reused for each retry, and SQLite's
-    internal busy handler exits as soon as the lock is released (not after
-    the full timeout).
-
-    Uses **jittered exponential backoff** so that two A processes retrying
-    at the same time do not stay synchronized and keep colliding.
-
-    Args:
-        retries: Max retries (default 20, for 21 total attempts).
-        base_delay: Initial delay in seconds (doubles each attempt).
-        max_delay: Cap for exponential backoff (default 10s).
-        jitter: Random fraction added/removed from delay (default 0.3,
-                giving 70-130 % of the nominal delay).
-    """
-
-    def decorator(method):
-        @functools.wraps(method)
-        def wrapper(self, *args, **kwargs):
-            last_exc = None
-            for attempt in range(retries + 1):
-                try:
-                    return method(self, *args, **kwargs)
-                except sqlite3.OperationalError as exc:
-                    last_exc = exc
-                    if attempt < retries:
-                        nominal = min(max_delay, base_delay * (2**attempt))
-                        # Jitter: random fraction of nominal around 1.0
-                        factor = 1.0 + jitter * (2.0 * random.random() - 1.0)
-                        delay = nominal * factor
-                        time.sleep(delay)
-            msg = (
-                f"links.db locked after {retries + 1} attempts ({retries} retries). "
-                f"Close other A terminals and try again."
-            )
-            raise RuntimeError(msg) from last_exc
-
-        return wrapper
-
-    return decorator
-
-
 @dataclass
 class Link:
     """Represents a directed link between two entries."""
@@ -100,13 +55,60 @@ class Link:
             self.created_at = datetime.now(timezone.utc).isoformat()
 
 
+
+import time
+import random
+import functools
+
+
+_LOCK_ERRORS = ("database is locked", "locking protocol", "locked")
+
+
+def _retry_on_lock(
+    retries: int = 20,
+    base_delay: float = 0.5,
+    max_delay: float = 10.0,
+    jitter: float = 0.3,
+):
+    """Decorator: retry on SQLite lock errors with exponential backoff + jitter.
+
+    Args:
+        retries: Maximum number of retry attempts.
+        base_delay: Initial delay in seconds (doubles each attempt).
+        max_delay: Maximum delay cap in seconds.
+        jitter: Random jitter fraction (0.3 = ±30%).
+    """
+
+    def decorator(func):
+
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any):
+            last_exc = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    err_msg = str(e)
+                    if not any(lock_msg in err_msg for lock_msg in _LOCK_ERRORS):
+                        raise
+                    last_exc = e
+                    if attempt < retries - 1:
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        jitter_amount = delay * jitter * random.random()
+                        time.sleep(delay + jitter_amount)
+            raise last_exc  # type: ignore[misc]
+
+        return wrapper
+
+    return decorator
+
+
 class LinksDB(SQLiteDB):
     """Database for managing bidirectional links."""
     
     def __init__(self):
         super().__init__(LINKS_DB, LINKS_SCHEMA)
     
-    @_retry_on_lock()
     def add_link(
         self,
         source_type: str,
@@ -144,56 +146,50 @@ class LinksDB(SQLiteDB):
         except Exception:
             # Already exists or other error
             return None
-
-    @_retry_on_lock()
+    
     def bulk_add_links(
         self,
-        links: list[tuple[str, str, str, str]],
-        source_type_default: str | None = None,
-        target_type_default: str | None = None,
+        pairs: list[tuple[str, str]],
+        source_type_default: str = "vorto",
+        target_type: str | None = None,
     ) -> int:
-        """Add multiple links in a single transaction (batch insert).
-
-        Self-links (same source and target ID) are silently skipped.
+        """Add multiple links in a single transaction.
 
         Args:
-            links: Each tuple is ``(source_id, target_id)`` or
-                   ``(source_type, source_id, target_type, target_id)``.
-                   If 2-tuples are given, ``source_type_default`` and
-                   ``target_type_default`` are used.
-            source_type_default: Default source type for 2-tuple entries.
-            target_type_default: Default target type for 2-tuple entries.
+            pairs: List of ``(source_id, target_id)`` tuples.
+            source_type_default: Entry type for source & target
+                                 (default ``"vorto"``).
+            target_type: Entry type for the target.
+                         Defaults to ``source_type_default``.
 
         Returns:
-            Number of links actually inserted.
+            Number of links actually inserted (skips self-links
+            and duplicate violations).
         """
+        target_type = target_type or source_type_default
         now = datetime.now(timezone.utc).isoformat()
-        rows: list[tuple[str, str, str, str, str]] = []
-        for entry in links:
-            if len(entry) == 2:
-                sid, tid = entry
-                st = source_type_default or "vorto"
-                tt = target_type_default or "vorto"
-            else:
-                st, sid, tt, tid = entry
-            if sid != tid:
-                rows.append((st, sid, tt, tid, now))
-
-        if not rows:
-            return 0
+        count = 0
 
         with self._connection() as conn:
-            conn.executemany(
-                """
-                INSERT OR IGNORE INTO links
-                    (source_type, source_id, target_type, target_id, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                rows,
-            )
+            for source_id, target_id in pairs:
+                if source_id == target_id:
+                    continue  # Don't link to self
+                try:
+                    conn.execute(
+                        """
+                        INSERT INTO links
+                            (source_type, source_id, target_type, target_id, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (source_type, source_id, target_type, target_id, now),
+                    )
+                    count += 1
+                except Exception:
+                    continue  # UNIQUE constraint or other
             conn.commit()
-            return conn.total_changes
-    
+
+        return count
+
     @_retry_on_lock()
     def remove_link(
         self,
@@ -225,6 +221,7 @@ class LinksDB(SQLiteDB):
             conn.commit()
             return cursor.rowcount > 0
     
+    @_retry_on_lock()
     def get_outgoing(
         self,
         source_type: str,
@@ -250,6 +247,7 @@ class LinksDB(SQLiteDB):
         )
         return [Link(**r) for r in results]
     
+    @_retry_on_lock()
     def get_incoming(
         self,
         target_type: str,
@@ -436,19 +434,6 @@ def add_link(
     return get_links_db().add_link(source_type, source_id, target_type, target_id)
 
 
-def bulk_add_links(
-    links: list[tuple[str, str, str, str]],
-    source_type_default: str | None = None,
-    target_type_default: str | None = None,
-) -> int:
-    """Add multiple links in a single transaction."""
-    return get_links_db().bulk_add_links(
-        links,
-        source_type_default=source_type_default,
-        target_type_default=target_type_default,
-    )
-
-
 def remove_link(
     source_type: str,
     source_id: str,
@@ -507,3 +492,23 @@ def get_linked_entries(
 ) -> dict[str, list[str]]:
     """Get all linked entry IDs."""
     return get_links_db().get_linked_entries(entry_type, entry_id)
+
+
+def bulk_add_links(
+    pairs: list[tuple[str, str]],
+    source_type_default: str = "vorto",
+    target_type: str | None = None,
+) -> int:
+    """Add multiple links in batch.
+
+    Args:
+        pairs: List of ``(source_id, target_id)`` tuples.
+        source_type_default: Entry type for source & target
+                             (default ``"vorto"``).
+        target_type: Entry type for the target.
+                     Defaults to ``source_type_default``.
+
+    Returns:
+        Number of links actually inserted.
+    """
+    return get_links_db().bulk_add_links(pairs, source_type_default, target_type)
