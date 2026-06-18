@@ -1,5 +1,7 @@
 """Base exceptions for A."""
 
+from __future__ import annotations
+
 from typing import Any
 
 
@@ -53,4 +55,22 @@ class ProtectedPathError(AError):
             f"Cannot {operation} protected path: {path}. "
             f"Remove the '.a-protected' marker file first "
             f"if you are sure."
+        )
+
+
+class PathTraversalError(AError):
+    """Raised when a file path escapes all allowed base directories.
+
+    Used by :func:`A.core.file_security.resolve_safe_path` when a
+    resolved path does not fall within any of the configured allowlist
+    base directories.
+    """
+
+    def __init__(self, path: str, allowed_bases: "list[str]" | None = None):
+        self.path = path
+        self.allowed_bases = allowed_bases or []
+        bases_str = ", ".join(self.allowed_bases) if self.allowed_bases else "(none)"
+        super().__init__(
+            f"Path traversal detected: '{path}' is not under any allowed "
+            f"base directory ({bases_str})."
         )
