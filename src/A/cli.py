@@ -595,6 +595,57 @@ def modulo_info(
 app.add_typer(modulo_app, name="modulo")
 
 
+# ── REPL Command ──────────────────────────────────────────────────────────────
+
+
+@app.command("repl")
+def repl(
+    ctx: typer.Context,
+    module_name: str = typer.Argument(
+        ...,
+        help=tr_multi(
+            "Nomo de la modulo por eniri REPL-re\u011dimon",
+            "Module name to enter REPL mode",
+            "Nom du module pour entrer en mode REPL",
+        ),
+    ),
+) -> None:
+    """Eniri interagan REPL-re\u011dimon por A-modulo.
+
+    In the REPL, type subcommands directly without the 'A <module>' prefix.
+    Use 'exit' or Ctrl+D to quit, '!' for shell commands.
+    """
+    from A.utils.repl import ModuleREPL
+
+    eps = _discover_plugin_names()
+    if module_name not in eps:
+        error(tr_multi(
+            f"Modulo '{module_name}' ne estas instalita a\u016d trovita.",
+            f"Module '{module_name}' is not installed or not found.",
+            f"Module '{module_name}' n'est pas install\u00e9 ou introuvable.",
+        ))
+        raise typer.Exit(1)
+
+    try:
+        app_raw = eps[module_name].load()
+        if not isinstance(app_raw, typer.Typer):
+            error(tr_multi(
+                f"Nevalida modulo '{module_name}': ne estas Typer-apliko",
+                f"Invalid module '{module_name}': not a Typer app",
+                f"Module '{module_name}' invalide: n'est pas une application Typer",
+            ))
+            raise typer.Exit(1)
+    except Exception as e:
+        error(tr_multi(
+            f"Ne eblas \u015dargi modulon '{module_name}': {e}",
+            f"Cannot load module '{module_name}': {e}",
+            f"Impossible de charger le module '{module_name}' : {e}",
+        ))
+        raise typer.Exit(1)
+
+    ModuleREPL(module_name=module_name, module_app=app_raw).cmdloop()
+
+
 def main():
     """Main entry point."""
     ensure_dirs()
