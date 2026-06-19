@@ -394,7 +394,7 @@ def modulo_ls(
     ),
     refresh: bool = typer.Option(
         False,
-        "--refresh",
+        "--refresxigi",
         help=tr_multi(
             "Refre\u015digi la manifeston de la reto",
             "Refresh the registry from network",
@@ -470,7 +470,7 @@ def modulo_serci(
     ),
     refresh: bool = typer.Option(
         False,
-        "--refresh",
+        "--refresxigi",
         help=tr_multi(
             "Refre\u015digi la manifeston de la reto",
             "Refresh the registry from network",
@@ -559,7 +559,7 @@ def modulo_info(
     ),
     refresh: bool = typer.Option(
         False,
-        "--refresh",
+        "--refresxigi",
         help=tr_multi(
             "Refre\u015digi la manifeston de la reto",
             "Refresh the registry from network",
