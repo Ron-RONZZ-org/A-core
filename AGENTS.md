@@ -296,7 +296,7 @@ Reference implementations for plugin developers:
 ## Testing
 
 ```bash
-poetry run pytest tests/
+uv run pytest tests/
 ```
 
 All new code must include tests.
