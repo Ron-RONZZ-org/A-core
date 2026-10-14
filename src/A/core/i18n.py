@@ -1,7 +1,5 @@
 """Internationalization for A - Esperanto-native."""
 
-from typing import Callable
-
 # Translations - Esperanto as primary
 _translations = {
     "eo": {
@@ -105,6 +103,26 @@ _translations = {
         "inversaordo": "Inversaordo",
         "sen_konfirmo": "Sen konfirmo",
         "sercho_termino": "Serĉo termino",
+        # espanso
+        "espanso_matches": "Espanso-pokaloj",
+        "trigger": "Aktivigo",
+        "trigger_example": "Aktiviga ekzemplo",
+        "replace": "Anstataŭo",
+        "replace_dosiero": "Anstataŭa dosiero",
+        "neniu_matches": "Neniuj pokaloj",
+        "minimun_unu_uid": "Bezonas almenaŭ unu UID",
+        # bash-function
+        "bash_functions": "Bash-funkcioj",
+        "neniu_funkcio": "Neniuj funkcioj",
+        "name": "Nomo",
+        "new_name": "Nova nomo",
+        "path_to_function_file": "Funkcia dosiero",
+        "forigita": "Forigita",
+        # misc CLI
+        "forcstitui": "Devigi",
+        "konservitaj": "Konservitaj retoj",
+        "mounted_": "Muntita:",
+        "particia_administrado": "Particia administrado",
     },
     "en": {
         # Core
@@ -201,6 +219,32 @@ _translations = {
         "inversaordo": "Reverse order",
         "sen_konfirmo": "No confirmation",
         "sercho_termino": "Search term",
+        # espanso
+        "espanso_matches": "Espanso Matches",
+        "trigger": "Trigger",
+        "trigger_example": "Trigger example",
+        "replace": "Replace",
+        "replace_dosiero": "Replacement file",
+        "neniu_matches": "No matches",
+        "minimun_unu_uid": "Requires at least one UID",
+        # bash-function
+        "bash_functions": "Bash Functions",
+        "neniu_funkcio": "No functions",
+        "name": "Name",
+        "new_name": "New name",
+        "path_to_function_file": "Function file",
+        "forigita": "Deleted",
+        # misc CLI
+        "forcstitui": "Force",
+        "konservitaj": "Saved networks",
+        "mounted_": "Mounted:",
+        "particia_administrado": "Partition management",
+        # Esperanto-only keys, completed for parity
+        "konektita": "Connected",
+        "malkonektita": "Disconnected",
+        "loko": "Location",
+        "nomo": "Name",
+        "statuso": "Status",
     },
     "fr": {
         # Core
@@ -297,6 +341,32 @@ _translations = {
         "inversaordo": "Ordre inverse",
         "sen_konfirmo": "Sans confirmation",
         "sercho_termino": "Terme de recherche",
+        # espanso
+        "espanso_matches": "Correspondances Espanso",
+        "trigger": "Déclencheur",
+        "trigger_example": "Exemple de déclencheur",
+        "replace": "Remplacement",
+        "replace_dosiero": "Fichier de remplacement",
+        "neniu_matches": "Aucune correspondance",
+        "minimun_unu_uid": "Nécessite au moins un UID",
+        # bash-function
+        "bash_functions": "Fonctions Bash",
+        "neniu_funkcio": "Aucune fonction",
+        "name": "Nom",
+        "new_name": "Nouveau nom",
+        "path_to_function_file": "Fichier de fonction",
+        "forigita": "Supprimé",
+        # misc CLI
+        "forcstitui": "Forcer",
+        "konservitaj": "Réseaux enregistrés",
+        "mounted_": "Monté:",
+        "particia_administrado": "Gestion des partitions",
+        # Esperanto-only keys, completed for parity
+        "konektita": "Connecté",
+        "malkonektita": "Déconnecté",
+        "loko": "Emplacement",
+        "nomo": "Nom",
+        "statuso": "Statut",
     },
 }
 
